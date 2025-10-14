@@ -1,0 +1,435 @@
+```{r}
+getwd()
+setwd("/Users/aavymac/UTSA/FallSemester2025/STA6923-Intro_to_Statistical_Learning/sta6923-project")
+```
+
+# 1. Data extraction & wrangle
+
+```{r}
+house<-read.csv("train.csv")
+```
+
+```{r}
+head(house)
+```
+
+```{r}
+dim(house)
+```
+
+```{r}
+str(house)
+```
+
+## 2 Data cleaning & preprocessing
+
+```{r}
+# convert int to character
+house$YearBuilt <- as.character(house$YearBuilt)
+house$YearRemodAdd <- as.character(house$YearRemodAdd)
+house$GarageYrBlt <- as.character(house$GarageYrBlt)
+house$YrSold   <- as.character(house$YrSold  )
+```
+
+```{r}
+str(house)
+```
+
+```{r}
+# Character variables only
+names(house)[sapply(house, is.character)]
+```
+
+```{r}
+sum(sapply(house,is.character))
+```
+
+```{r}
+# numerical variables only
+names(house)[sapply(house,is.numeric)]
+```
+
+```{r}
+sum(sapply(house,is.numeric))
+```
+
+```{r}
+names(house)[sapply(house,is.factor)]                           
+```
+
+```{r}
+summary(house)
+```
+
+```{r}
+colSums(is.na(house))
+```
+
+```{r}
+sum(colSums(is.na(house)))
+```
+
+From above output these variables have missing values (out of total 1460 observations) :
+
++-----------------+-----------------------+----------------------+--------------------------------+-----------------------+----------------------+
+| variables (num) | no. of missing values | \% of missing values | variables (char)               | no. of missing values | \% of missing values |
++=================+=======================+======================+================================+=======================+======================+
+| LotFrontage     | 259                   | \~ 18                | Alley                          | 1369                  | \~ 94                |
++-----------------+-----------------------+----------------------+--------------------------------+-----------------------+----------------------+
+| ```             | 8                     | \~ 0.55              | ```                            | 8                     |                      |
+| MasVnrArea      |                       |                      | MasVnrType                     |                       |                      |
+| ```             |                       |                      | ```                            |                       |                      |
++-----------------+-----------------------+----------------------+--------------------------------+-----------------------+----------------------+
+|                 |                       |                      | ```                            | 37                    |                      |
+|                 |                       |                      | BsmtQual                       |                       |                      |
+|                 |                       |                      | ```                            |                       |                      |
++-----------------+-----------------------+----------------------+--------------------------------+-----------------------+----------------------+
+|                 |                       |                      | ```                            | 37                    |                      |
+|                 |                       |                      | BsmtCond                       |                       |                      |
+|                 |                       |                      | ```                            |                       |                      |
++-----------------+-----------------------+----------------------+--------------------------------+-----------------------+----------------------+
+|                 |                       |                      | ```                            | 38                    |                      |
+|                 |                       |                      | BsmtExposure                   |                       |                      |
+|                 |                       |                      | ```                            |                       |                      |
++-----------------+-----------------------+----------------------+--------------------------------+-----------------------+----------------------+
+|                 |                       |                      | ```                            | 37                    |                      |
+|                 |                       |                      | BsmtFinType1                   |                       |                      |
+|                 |                       |                      | ```                            |                       |                      |
++-----------------+-----------------------+----------------------+--------------------------------+-----------------------+----------------------+
+|                 |                       |                      | ```                            | 38                    |                      |
+|                 |                       |                      | BsmtFinType2                   |                       |                      |
+|                 |                       |                      | ```                            |                       |                      |
++-----------------+-----------------------+----------------------+--------------------------------+-----------------------+----------------------+
+|                 |                       |                      | ```                            | 1                     |                      |
+|                 |                       |                      | Electrical                     |                       |                      |
+|                 |                       |                      | ```                            |                       |                      |
++-----------------+-----------------------+----------------------+--------------------------------+-----------------------+----------------------+
+|                 |                       |                      | ```                            | 690                   | \~ 47.3              |
+|                 |                       |                      | FireplaceQu                    |                       |                      |
+|                 |                       |                      | ```                            |                       |                      |
++-----------------+-----------------------+----------------------+--------------------------------+-----------------------+----------------------+
+|                 |                       |                      | ```                            | 81                    |                      |
+|                 |                       |                      | GarageType                     |                       |                      |
+|                 |                       |                      | ```                            |                       |                      |
++-----------------+-----------------------+----------------------+--------------------------------+-----------------------+----------------------+
+|                 |                       |                      | ```                            | 81                    |                      |
+|                 |                       |                      | GarageYrBlt                    |                       |                      |
+|                 |                       |                      | (but it shows on num category) |                       |                      |
+|                 |                       |                      | ```                            |                       |                      |
++-----------------+-----------------------+----------------------+--------------------------------+-----------------------+----------------------+
+|                 |                       |                      | ```                            | 81                    |                      |
+|                 |                       |                      | GarageFinish                   |                       |                      |
+|                 |                       |                      | ```                            |                       |                      |
++-----------------+-----------------------+----------------------+--------------------------------+-----------------------+----------------------+
+|                 |                       |                      | ```                            | 81                    |                      |
+|                 |                       |                      | GarageQual                     |                       |                      |
+|                 |                       |                      | ```                            |                       |                      |
++-----------------+-----------------------+----------------------+--------------------------------+-----------------------+----------------------+
+|                 |                       |                      | ```                            | 81                    |                      |
+|                 |                       |                      | GarageCond                     |                       |                      |
+|                 |                       |                      | ```                            |                       |                      |
++-----------------+-----------------------+----------------------+--------------------------------+-----------------------+----------------------+
+|                 |                       |                      | ```                            | 1453                  | \~ 99.6              |
+|                 |                       |                      | PoolQC                         |                       |                      |
+|                 |                       |                      | ```                            |                       |                      |
++-----------------+-----------------------+----------------------+--------------------------------+-----------------------+----------------------+
+|                 |                       |                      | ```                            | 1179                  | \~ 80.8              |
+|                 |                       |                      | Fence                          |                       |                      |
+|                 |                       |                      | ```                            |                       |                      |
++-----------------+-----------------------+----------------------+--------------------------------+-----------------------+----------------------+
+|                 |                       |                      | ```                            | 1406                  | \~ 96.3              |
+|                 |                       |                      | MiscFeature                    |                       |                      |
+|                 |                       |                      | ```                            |                       |                      |
++-----------------+-----------------------+----------------------+--------------------------------+-----------------------+----------------------+
+
+Here, variable `Alley` has missing about 94%, so it is better to remove `Alley`. variable `FireplaceQu` has missing about 48%, so it is better to remove it. variabel `PoolQc` has missing about 99.5%, so it is better to remove it. variable `Fence` has missing about 81%, so it is better to remove it. variable `MiscFeature` has missing about 96%, so it is better to remove it. Then the rest of the missing variables, we can imputed by their mode, since they are categorical variables. Hence, we can concluded that 5 variables will be removed and 11 variables wiil be imputated
+
+```{r}
+house <- house[, !names(house) %in% c("Id","Alley", "FireplaceQu", "PoolQC", "Fence", "MiscFeature")]
+```
+
+```{r}
+str(house)
+```
+
+```{r}
+house$MasVnrArea[is.na(house$MasVnrArea)] <- mean(house$MasVnrArea,na.rm = TRUE) 
+house$LotFrontage[is.na(house$LotFrontage)] <- mean(house$LotFrontage,na.rm = TRUE) 
+```
+
+```{r}
+# Impute with mean (most frequent value)
+impute_mode <- function(x) {
+                                if (is.character(x)){
+                                x[is.na(x)] <- mode(x)
+                            }
+  return(x)
+}
+```
+
+```{r}
+cols_to_impute <- c("MasVnrType",
+                     "BsmtQual",
+                      "BsmtCond",
+                      "BsmtExposure",
+                      "BsmtFinType1",
+                      "BsmtFinType2",
+                      "Electrical",
+                      "GarageType",
+                      "GarageYrBlt",
+                      "GarageFinish", 
+                      "GarageQual", 
+                      "GarageCond"
+                      )
+
+house[cols_to_impute] <- apply(house[cols_to_impute],2, impute_mode)
+
+```
+
+```{r}
+sum(colSums(is.na(house)))
+```
+
+```{r}
+colSums(is.na(house))
+```
+
+Finally we removed all missing values from the dataset `house`.
+
+```{r}
+dim(house)
+```
+
+```{r}
+library(caTools)
+set.seed(123)
+```
+
+```{r}
+# split <- sample.split(house$SalePrice, SplitRatio = 0.7)
+
+# train_house <- subset(house, split == TRUE)
+# test_house  <- subset(house, split == FALSE)
+```
+
+```{r}
+# trainX_house <-subset(train_house,select=-SalePrice)
+# trainY_house <-data.frame(train_house$SalePrice)
+# testX_house <-subset(test_house,select=-SalePrice)
+# testY_house <-data.frame(test_house$SalePrice)
+```
+
+```{r}
+str(house)
+```
+
+```{r}
+dim(house)
+```
+
+```{r}
+# Character variables only
+cols_char <- names(house)[sapply(house, is.character)]
+cols_char
+```
+
+```{r}
+# numerical variables only
+cols_num <- names(house)[sapply(house,is.numeric)]
+cols_num
+```
+
+```{r}
+length(cols_char)
+```
+
+```{r}
+length(cols_num)
+```
+
+```{r}
+library(e1071)
+skewed <- apply(house[cols_num],2, skewness) # 2 indicates column
+print("skewed of Original Units")
+skewed
+```
+
+All numerical predictors are skewed, so we can transformed those variable in `house`
+
+```{r}
+str(house)
+```
+
+```{r}
+library(caret)
+# Apply BoxCox transformation to numeric predictors
+housePP<- preProcess(house,method ="BoxCox")
+```
+
+```{r}
+# Transform the `house` data
+house_trans<- predict(housePP,house)
+```
+
+```{r}
+str(house_trans)
+```
+
+```{r}
+skewed <- apply(house_trans[cols_num],2, skewness) # 2 indicates column
+print("skewed of Original Units")
+skewed
+```
+
+```{r}
+# Histograms for all predictors in house w/o transformation
+for (col in cols_num) {
+                        hist(house[[col]],
+                        main = paste("Original Histogram of", col),
+                        xlab = col,
+                        col = "skyblue",
+                        border = "white")
+                                  }
+                                  
+                                    
+  
+
+```
+
+```{r}
+# Histograms for all predictors in house w/ transformation
+for (col in cols_num) {
+                        hist(house_trans[[col]],
+                        main = paste("transformed Histogram of", col),
+                        xlab = col,
+                        col = "skyblue",
+                        border = "white")
+                                  }
+```
+
+```{r}
+cor_matrix <-cor(house_trans[cols_num])
+cor_matrix
+```
+
+```{r}
+
+library(corrplot)
+# Basic correlation plot in the color form
+corrplot(cor_matrix, 
+         method = "color", 
+         type = "upper", 
+         order = "hclust", 
+         tl.col = "black", 
+         # tl.srt = 45,
+         title = "Correlation Matrix of numeric Predictor Variables",
+         mar = c(0, 0, 2, 0)
+         )
+```
+
+```{r}
+#select numeric columns only
+house_trans_num <- house_trans[,cols_num]
+```
+
+```{r}
+str(house_trans_num)
+```
+
+```{r}
+dim(house_trans_num)
+```
+
+```{r}
+nearZeroVar(house_trans_num)
+```
+
+```{r}
+#Remove the near zero variance predictor 
+house_trans_num <-  house_trans_num[, -nearZeroVar(house_trans_num)]
+
+```
+
+```{r}
+dim(house_trans_num)
+```
+
+```{r}
+cor_matrix1 <- cor(house_trans_num)
+```
+
+```{r}
+corrplot(cor_matrix1,
+         order="hclust",
+         tl.cex=.35,
+         title = "Correlation Matrix of numeric transformed Predictor Variables",
+         mar = c(0, 0, 2, 0))
+```
+
+```{r}
+## caret's findCorrelation function is used to identify columns to remove.
+highCorr <- findCorrelation(cor_matrix1, .75)
+highCorr
+```
+
+```{r}
+#Removing highly correlated predictors
+cor_matrix2 <- cor(house_trans_num[,-highCorr])
+
+```
+
+```{r}
+corrplot(cor_matrix2, order = "hclust", tl.cex = .35)
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+```
+
+```{r}
+```
+
+```{r}
+```
+
+```{r}
+```
+
+```{r}
+```
+
+```{r}
+```
