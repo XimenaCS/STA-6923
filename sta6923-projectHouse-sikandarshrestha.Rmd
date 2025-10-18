@@ -1,0 +1,276 @@
+
+
+```{r}
+getwd()
+setwd("/Users/aavymac/UTSA/FallSemester2025/STA6923-Intro_to_Statistical_Learning/sta6923-project")
+```
+
+## 1. Extraction & Cleaning
+```{r}
+house<- read.csv("House Price Prediction Dataset.csv")
+head(house)
+```
+```{r}
+str(house)
+```
+```{r}
+# Character variables only
+cat("character variables:",names(house)[sapply(house, is.character)],'\n')
+cat("numeric variables:",names(house)[sapply(house, is.numeric)])   
+```
+```{r}
+colSums(is.na(house))
+```
+
+Missing values: In this dataset, there is no missing values. 
+## Converts `character` into `factor`
+
+```{r}
+# Function to convert `character` columns to `factor`, removed `Id` 
+updated_df <- function(df) {
+                                        # Identify character columns
+                                        char_cols <- sapply(df, is.character)
+                                        
+                                        # Convert character columns to factors
+                                        df[char_cols] <- lapply(df[char_cols], as.factor)
+                                        df$YearBuilt <- as.factor(house$YearBuilt)
+                                        
+                                        # Remove 'Id' column
+                                        df <- df[, !names(df) %in% "Id"]
+                                        # Return updated dataframe
+                                        return(df)
+                                      }
+```
+
+
+```{r}
+house <- updated_df(house)
+str(house)
+```
+```{r}
+table(house$YearBuilt)
+```
+
+## Binning on `YearBuilt` variable
+```{r}
+house$YearBuilt <- as.numeric(as.character(house$YearBuilt))
+```
+
+
+```{r}
+house$YearBuiltBin <- cut(
+                    house$YearBuilt,
+                    breaks = c(1900, 1925,1950, 1975, 2000, 2025),
+                    labels = c("1900–1925", "1926–1950", "1951-1975", "1976–2000", "2001–2025"),
+                    include.lowest = TRUE
+                  )
+
+```
+
+
+```{r}
+table(house$YearBuiltBin)
+```
+
+
+```{r}
+cols_fac <- names(house)[sapply(house, is.factor)]
+cols_num <- names(house)[sapply(house, is.numeric)]
+cat('categorical variables:::>',cols_fac,'\n')
+cat('numeric variables:::>',cols_num,'\n')
+```
+
+```{r}
+str(house)
+```
+```{r}
+house <- house[,-5]
+
+```
+
+```{r}
+str(house)
+```
+```{r}
+cols_fac <- names(house)[sapply(house, is.factor)]
+cols_num <- names(house)[sapply(house, is.numeric)]
+cat('categorical variables:::>',cols_fac,'\n')
+cat('numeric variables:::>',cols_num,'\n')
+```
+
+
+```{r}
+library(e1071)
+skewed <- apply(house[cols_num],2, skewness) # 2 indicates column
+print("skewed of Original Units")
+skewed
+```
+
+Since skewness is most likely lower, so we dont need to transformed the features.
+## EDA ( Exploration Data Analysis)
+```{r}
+# Histograms for all predictors in house w/o transformation
+for (col in cols_num) {
+                        hist(house[[col]],
+                        main = paste("Original Histogram of", col),
+                        xlab = col,
+                        col = "skyblue",
+                        border = "white")
+                                  }
+                                  
+```
+
+
+
+```{r}
+# Load required packages
+  library(GGally)
+  library(ggplot2)
+plot_variable_pairs <- function(df) {
+  
+  
+  # Create pair plot with regression lines
+  ggpairs(df,
+          lower = list(continuous = wrap("smooth", color = "red")),  # regression line
+          diag = list(continuous = wrap("densityDiag", fill = "green")),  # green density plot
+          upper = "blank",  # like corner=True in Seaborn
+          progress = FALSE
+  ) +
+    theme_minimal()
+}
+```
+
+
+```{r}
+plot_variable_pairs(house[cols_num])
+```
+
+
+```{r}
+#Price vs. Area
+g1 <- ggplot(house, aes(x = Area, y = Price)) +
+            geom_point(color = "green") +
+            geom_smooth(method = "lm", color = "red", se = FALSE) +
+            labs(title = "Price vs. Area", x = "Area", y = "Price") +
+            theme_minimal()
+
+g1
+```
+
+
+```{r}
+#Price vs. Bedrooms
+g2 <- ggplot(house, aes(x = Bedrooms, y = Price)) + 
+            geom_point(color = "green") +
+            geom_smooth(method = "lm", color = "red", se = FALSE) +
+            labs(title = "Bedrooms vs. Price", x = "Bedrooms", y = "Price") +
+            theme_minimal()
+g2
+```
+
+
+```{r}
+#Price vs. Bathrooms
+g3 <- ggplot(house, aes(x = Bathrooms, y = Price)) + 
+            geom_point(color = "green") +
+            geom_smooth(method = "lm", color = "red", se = FALSE) +
+            labs(title = "Price vs. Bathrooms", x = "Bathrooms", y = "Price")+ 
+            theme_minimal()
+g3
+```
+
+
+```{r}
+#Price vs. Floors
+g4 <- ggplot(house, aes(x = Floors, y = Price)) + 
+            geom_point(color = "green") +
+            geom_smooth(method = "lm", color = "red", se = FALSE) +
+            labs(title = "Price vs. Floors", x = "Floors", y = "Price")+ 
+            theme_minimal()
+g4
+```
+
+```{r}
+pairs(house[cols_num])
+```
+
+
+
+```{r}
+library(corrplot)
+cor_matrix <- cor(house[cols_num])
+```
+
+
+```{r}
+corrplot(cor_matrix,
+         method="number",
+         order="hclust",
+         tl.cex=.35,
+         title = "Correlation Matrix of numeric transformed Predictor Variables",
+         mar = c(0, 0, 2, 0))
+```
+
+
+## plots between two variables either cat vs num by all possible combinations.
+```{r}
+plot_categorical_and_continuous_vars <- function(df, categorical_vars, continuous_vars) {
+  library(ggplot2)
+  library(ggbeeswarm)   # for swarm-like plots
+  library(gridExtra)    # to arrange multiple plots
+
+  for (cat_var in categorical_vars) {
+    for (cont_var in continuous_vars) {
+
+      # Boxplot
+      p1 <- ggplot(df, aes_string(x = cat_var, y = cont_var)) +
+        geom_boxplot(fill = "skyblue") +
+        ggtitle("Boxplot") +
+        theme_minimal()
+
+      # Bar plot (mean value by category)
+      p2 <- ggplot(df, aes_string(x = cat_var, y = cont_var)) +
+        stat_summary(fun = mean, geom = "bar", fill = "lightgreen") +
+        ggtitle("Bar Plot (Mean)") +
+        theme_minimal()
+
+      # Scatter plot (jittered to avoid overlap)
+      p3 <- ggplot(df, aes_string(x = cat_var, y = cont_var)) +
+        geom_jitter(width = 0.2, color = "tomato") +
+        ggtitle("Scatter Plot") +
+        theme_minimal()
+
+      # Swarm plot (bee swarm)
+      p4 <- ggplot(df, aes_string(x = cat_var, y = cont_var)) +
+        geom_quasirandom(color = "purple") +
+        ggtitle("Swarm Plot") +
+        theme_minimal()
+
+      # Arrange the four plots in a grid (like plt.subplot)
+      grid.arrange(p1, p2, p3, p4, ncol = 4)
+    }
+  }
+}
+
+```
+
+
+```{r}
+plot_categorical_and_continuous_vars(house,cols_fac,cols_num)
+```
+
+
+
+```{r}
+# Bar plot (mean value by category)
+ b1 <- ggplot(house, aes_string(x = "Location", y = "Bedrooms")) +
+        stat_summary(fun = mean, geom = "bar", fill = "lightgreen") +
+        ggtitle("Bar Plot (Mean)") +
+        theme_minimal()
+b1
+```
+
+
+
+```{r}
+```
