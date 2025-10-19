@@ -1,0 +1,157 @@
+# House Price Prediction Analysis
+
+## 0. Load Packages
+
+First, we load all the packages we need for the project
+
+```{r}
+library(dplyr)
+library(e1071)
+library(ggplot2)
+library(gridExtra)
+library(corrplot)
+```
+
+## 1. Extraction & Cleaning
+
+Then, we upload the csv file to R and check the structure of the data
+
+```{r}
+house<- read.csv("House Price Prediction Dataset.csv")
+head(house,3)
+```
+
+```{r}
+str(house)
+```
+
+```{r}
+# Character variables only
+cat("Character variables:",names(house)[sapply(house, is.character)],'\n')
+cat("Numeric variables:",names(house)[sapply(house, is.numeric)])   
+```
+
+```{r}
+summary(house)
+```
+
+In this dataset, there is no missing values.
+
+```{r}
+#checking missing values
+colSums(is.na(house))
+```
+
+Create a variable named TotalRooms that gives us the total rooms each house have by adding bedrooms and bathrooms, and convert columns to factor.
+
+```{r}
+house['TotalRooms'] = house['Bedrooms'] + house['Bathrooms']
+
+# Function to convert `character` columns to `factor`, removed `Id` 
+updated_df <- function(df) {
+# Identify columns that are categorical
+      cat_cols <- c('Location', 'Condition', 'Garage', 'Bedrooms', 'Floors', 'Bathrooms')
+                                        
+# Convert categorical columns to factors
+      df[cat_cols] <- lapply(df[cat_cols], as.factor)
+                                        
+# Remove 'Id' column
+      df <- df[, !names(df) %in% "Id"]
+ # Return updated dataframe
+      return(df)
+}
+house_v2 <- updated_df(house)
+str(house_v2)
+```
+
+Group YearBuilt into 5 groups to capture for handing
+
+```{r}
+#Binning on YearBuilt variable and remove original
+house_v2$YearBuiltBin <- cut(
+                    house_v2$YearBuilt,
+                    breaks = c(1900, 1925,1950, 1975, 2000, 2025),
+                    labels = c("1900–1925", "1926–1950", "1951-1975", "1976–2000", "2001–2025"),
+                    include.lowest = TRUE
+                  )
+```
+
+```{r}
+table(house_v2$YearBuiltBin)
+```
+
+```{r}
+cols_fac <- names(house_v2)[sapply(house_v2, is.factor)]
+cols_num <- names(house_v2)[sapply(house_v2, is.numeric)]
+cat('categorical variables:::>',cols_fac,'\n')
+cat('numeric variables:::>',cols_num,'\n')
+```
+
+```{r}
+house_v3 <- house_v2 %>% select(-YearBuilt)
+colnames(house_v3)
+```
+
+```{r}
+skewed <- apply(house_v3[sapply(house_v3, is.numeric)],2, skewness) # 2 indicates column
+print("skeweness")
+skewed
+```
+
+Since skewness is \~0, there is no need to transformed the variables.
+
+## EDA (Exploration Data Analysis)
+
+### Price distribution
+
+```{r}
+#price distribution
+ggplot(house_v3, aes(x = Price)) +
+geom_histogram(bins=30) +
+labs(title = "Distribution of House Prices")+
+  theme_minimal()
+
+```
+
+### Predictors distribution
+
+```{r}
+cols_boxplot <- c("Bedrooms","Bathrooms","Floors","YearBuiltBin","Garage", "Condition","Location")
+
+for (col in cols_boxplot) {
+  plots <- ggplot(house_v3, aes_string(x = col, y = "Price")) +
+    geom_boxplot(fill="skyblue", color = "grey") +
+    labs(title = paste("Price by", col))+
+    theme_minimal()
+  print(plots)
+}
+```
+
+```{r}
+#Price vs. Area
+ggplot(house_v3, aes(x = Area, y = Price)) +
+            geom_point(color = "lightgreen") +
+            labs(title = "Price vs. Area", x = "Area", y = "Price") +
+            theme_minimal()
+```
+
+### Correlations
+
+```{r}
+# Convert factors to dummy variables
+df_dummies <- model.matrix(~ . - 1, data = house_v3) 
+
+cor_matrix <- cor(df_dummies, use = "pairwise.complete.obs")
+
+# plot
+corrplot(cor_matrix,
+         method = "color",
+         addCoef.col = "black",
+         number.cex = 0.45,
+         tl.cex = 0.6,
+         tl.col = "black",
+         title = "Correlation Matrix with Dummy Variables",
+         mar = c(0,0,1,0))
+```
+
+## 
