@@ -1,61 +1,52 @@
-
-
 ```{r}
 getwd()
 setwd("/Users/aavymac/UTSA/FallSemester2025/STA6923-Intro_to_Statistical_Learning/sta6923-project")
 ```
 
 ## 1. Extraction & Cleaning
+
 ```{r}
 house<- read.csv("House Price Prediction Dataset.csv")
 head(house)
 ```
+
 ```{r}
+# structure function 
 str(house)
 ```
-```{r}
-# Character variables only
-cat("character variables:",names(house)[sapply(house, is.character)],'\n')
-cat("numeric variables:",names(house)[sapply(house, is.numeric)])   
-```
+
 ```{r}
 colSums(is.na(house))
 ```
 
-Missing values: In this dataset, there is no missing values. 
-## Converts `character` into `factor`
+**Missing values:** In this dataset, there is no missing values.
 
 ```{r}
 # Function to convert `character` columns to `factor`, removed `Id` 
-updated_df <- function(df) {
+df_clean <- function(df) {
                                         # Identify character columns
                                         char_cols <- sapply(df, is.character)
                                         
                                         # Convert character columns to factors
                                         df[char_cols] <- lapply(df[char_cols], as.factor)
-                                        df$YearBuilt <- as.factor(house$YearBuilt)
+                                        # df$YearBuilt <- as.factor(house$YearBuilt)
                                         
                                         # Remove 'Id' column
-                                        df <- df[, !names(df) %in% "Id"]
+                                        df <- df[, !names(df) %in% "Id" ]
                                         # Return updated dataframe
                                         return(df)
                                       }
 ```
 
+```{r}
+house <- df_clean(house)
+```
 
 ```{r}
-house <- updated_df(house)
 str(house)
-```
-```{r}
-table(house$YearBuilt)
 ```
 
 ## Binning on `YearBuilt` variable
-```{r}
-house$YearBuilt <- as.numeric(as.character(house$YearBuilt))
-```
-
 
 ```{r}
 house$YearBuiltBin <- cut(
@@ -64,40 +55,79 @@ house$YearBuiltBin <- cut(
                     labels = c("1900–1925", "1926–1950", "1951-1975", "1976–2000", "2001–2025"),
                     include.lowest = TRUE
                   )
-
 ```
 
+```{r}
+table(house$YearBuilt)
+```
 
 ```{r}
 table(house$YearBuiltBin)
 ```
 
-
-```{r}
-cols_fac <- names(house)[sapply(house, is.factor)]
-cols_num <- names(house)[sapply(house, is.numeric)]
-cat('categorical variables:::>',cols_fac,'\n')
-cat('numeric variables:::>',cols_num,'\n')
-```
-
 ```{r}
 str(house)
 ```
+
+## 2. Descriptive Statistics & Data Overview:-
+
 ```{r}
+library(psych)
+describe(house)
+```
+
+```{r}
+summary(house)
+```
+
+## 2.1 Initial insights from Numerical data:
+
+-   **Area:** Properties also show a large range in size (501 to 4,999 sq ft) with mean sq.ft is 2786.21.
+
+-   **Price:** Property prices vary from \$50,005.00 to \~ \$1 million with average price is around \$537,676.85. Its SD is higher(\$276428.85), so it indicates significantly dispersion.
+
+## 2.2 Initial insights from categorical data:
+
+**Location=\>**
+
+-   Downtown: 558 Rural: 474 Suburban: 483 Urban: 485
+
+```{=html}
+<!-- -->
+```
+-   The distribution is relatively balanced within rural, suburban, & urban. But, downtown has more properties.
+
+**Condition=\>**
+
+-   Excellent:511 Fair:521 Good:461 Poor:507
+
+-   The distribution across condition grades are fairly unifrom except Good one.
+
+**Garage=\>**
+
+-   No:1038 Yes:962
+
+-   There is almost an even split between properties having Garage or not.
+
+**YearBuilt=\>**
+
+-   The distribution is almost evenly uniform at each 25 years period from 1900 to 2025.
+
+```{r}
+# remove `YearBuilt` variabel from dataset `house`
 house <- house[,-5]
-
 ```
 
 ```{r}
 str(house)
 ```
+
 ```{r}
 cols_fac <- names(house)[sapply(house, is.factor)]
 cols_num <- names(house)[sapply(house, is.numeric)]
 cat('categorical variables:::>',cols_fac,'\n')
 cat('numeric variables:::>',cols_num,'\n')
 ```
-
 
 ```{r}
 library(e1071)
@@ -106,8 +136,12 @@ print("skewed of Original Units")
 skewed
 ```
 
-Since skewness is most likely lower, so we dont need to transformed the features.
-## EDA ( Exploration Data Analysis)
+Since skewness is most likely lower, so we don't need to transformed the features.
+
+## 3. EDA (Exploration Data Analysis) / Data Visualizations
+
+## 3.1 Distribution of all numeric predictors including target `Price` w/o transformation
+
 ```{r}
 # Histograms for all predictors in house w/o transformation
 for (col in cols_num) {
@@ -120,7 +154,7 @@ for (col in cols_num) {
                                   
 ```
 
-
+## 3.2 Plotting between all possible two numeric variables 
 
 ```{r}
 # Load required packages
@@ -133,18 +167,18 @@ plot_variable_pairs <- function(df) {
   ggpairs(df,
           lower = list(continuous = wrap("smooth", color = "red")),  # regression line
           diag = list(continuous = wrap("densityDiag", fill = "green")),  # green density plot
-          upper = "blank",  # like corner=True in Seaborn
+          upper = "blank",  
           progress = FALSE
-  ) +
-    theme_minimal()
+          ) +
+          theme_minimal()
 }
 ```
-
 
 ```{r}
 plot_variable_pairs(house[cols_num])
 ```
 
+## 3.3 Plotting for `Price` by `Area`, `Bedrooms`, `Bathrooms`, `Floors`, `YearBuiltBin` using ggplot( Grammer of Graphics plot) 
 
 ```{r}
 #Price vs. Area
@@ -157,7 +191,6 @@ g1 <- ggplot(house, aes(x = Area, y = Price)) +
 g1
 ```
 
-
 ```{r}
 #Price vs. Bedrooms
 g2 <- ggplot(house, aes(x = Bedrooms, y = Price)) + 
@@ -168,7 +201,6 @@ g2 <- ggplot(house, aes(x = Bedrooms, y = Price)) +
 g2
 ```
 
-
 ```{r}
 #Price vs. Bathrooms
 g3 <- ggplot(house, aes(x = Bathrooms, y = Price)) + 
@@ -178,7 +210,6 @@ g3 <- ggplot(house, aes(x = Bathrooms, y = Price)) +
             theme_minimal()
 g3
 ```
-
 
 ```{r}
 #Price vs. Floors
@@ -191,16 +222,33 @@ g4
 ```
 
 ```{r}
-pairs(house[cols_num])
+#Price vs. YearBuiltBin
+g5 <- ggplot(house, aes(x = YearBuiltBin, y = Price)) + 
+            geom_point(color = "green") +
+            geom_smooth(method = "lm", color = "red", se = FALSE) +
+            labs(title = "Price vs. YearBuiltBin", x = "YearBuiltBin", y = "Price")+ 
+            theme_minimal()
+g5
 ```
 
+```{r}
+#Price vs. Location
+g6 <- ggplot(house, aes(x = Location, y = Price)) + 
+            geom_point(color = "green") +
+            geom_smooth(method = "lm", color = "red", se = FALSE) +
+            labs(title = "Price vs. Location", x = "Location", y = "Price")+ 
+            theme_minimal()
+g6
+```
 
+## 3.4 Correlation plot
 
 ```{r}
 library(corrplot)
 cor_matrix <- cor(house[cols_num])
-```
+cor_matrix
 
+```
 
 ```{r}
 corrplot(cor_matrix,
@@ -211,8 +259,10 @@ corrplot(cor_matrix,
          mar = c(0, 0, 2, 0))
 ```
 
+**Key Insight:** All correlations are extremely weak (close to 0), with the strongest being `Floors-Price` at only 0.056. This suggests these features alone have very little linear relationship with house `Price` in your dataset.
 
-## plots between two variables either cat vs num by all possible combinations.
+## 3.5 plots between two variables  categorical vs numeric by all possible combinations.
+
 ```{r}
 plot_categorical_and_continuous_vars <- function(df, categorical_vars, continuous_vars) {
   library(ggplot2)
@@ -254,23 +304,49 @@ plot_categorical_and_continuous_vars <- function(df, categorical_vars, continuou
 
 ```
 
-
 ```{r}
 plot_categorical_and_continuous_vars(house,cols_fac,cols_num)
 ```
 
+```{r}
+str(house)
+```
 
+## 3.6 Box plot
 
 ```{r}
-# Bar plot (mean value by category)
- b1 <- ggplot(house, aes_string(x = "Location", y = "Bedrooms")) +
-        stat_summary(fun = mean, geom = "bar", fill = "lightgreen") +
-        ggtitle("Bar Plot (Mean)") +
+# Bar plot between YearBuiltBin vs Price (mean value by category)
+library(ggplot2)
+ b1 <- ggplot(house, aes_string(x = 'YearBuiltBin', y = 'Price')) +
+        geom_boxplot(fill = "skyblue") +
+        ggtitle("Bar Plot YearBuilt vs Price (Mean)") +
         theme_minimal()
 b1
 ```
 
-
+```{r}
+# Bar plot between Location vs Price (mean value by category)
+library(ggplot2)
+ b2 <- ggplot(house, aes_string(x = 'Location', y = 'Price')) +
+        geom_boxplot(fill = "skyblue") +
+        ggtitle("Bar Plot Location vs Price (Mean)") +
+        theme_minimal()
+b2
+```
 
 ```{r}
+#Price vs. YearBuiltBin
+ b3 <- ggplot(house, aes_string(x = 'Condition', y = 'Price')) +
+        geom_boxplot(fill = "skyblue") +
+        ggtitle("Bar Plot Condition vs Price (Mean)") +
+        theme_minimal()
+b3
+```
+
+```{r}
+ b2 <- ggplot(house, aes_string(x = 'Garage', y = 'Price')) +
+        geom_boxplot(fill = "skyblue") +
+        ggtitle("Bar Plot Garage vs Price (Mean)") +
+        theme_minimal()
+b2
 ```
