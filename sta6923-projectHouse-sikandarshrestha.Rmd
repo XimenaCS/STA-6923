@@ -3,6 +3,12 @@ getwd()
 setwd("/Users/aavymac/UTSA/FallSemester2025/STA6923-Intro_to_Statistical_Learning/sta6923-project")
 ```
 
+You should always include the link or appropriate reference for your data source.
+
+The histogram should be the one you used to visualize the price. How can the price appear to have no association with Area or other variables? If your goal is to predict the price using this dataset, you need to demonstrate at least some potential relationships among the variables.
+
+Please review your data and make any necessary changes as soon as possible.
+
 ## 1. Extraction & Cleaning
 
 ```{r}
@@ -92,9 +98,8 @@ summary(house)
 
 -   Downtown: 558 Rural: 474 Suburban: 483 Urban: 485
 
-```{=html}
 <!-- -->
-```
+
 -   The distribution is relatively balanced within rural, suburban, & urban. But, downtown has more properties.
 
 **Condition=\>**
@@ -154,7 +159,16 @@ for (col in cols_num) {
                                   
 ```
 
-## 3.2 Plotting between all possible two numeric variables 
+```{r}
+library(ggplot2)
+#price distribution
+ggplot(house, aes(x = Price)) +
+geom_histogram(bins=30) +
+labs(title = "Distribution of House Prices")+
+  theme_minimal()
+```
+
+## 3.2 Plotting between all possible two numeric variables
 
 ```{r}
 # Load required packages
@@ -178,7 +192,29 @@ plot_variable_pairs <- function(df) {
 plot_variable_pairs(house[cols_num])
 ```
 
-## 3.3 Plotting for `Price` by `Area`, `Bedrooms`, `Bathrooms`, `Floors`, `YearBuiltBin` using ggplot( Grammer of Graphics plot) 
+## 3.3 Scatter Plotting for `Price` by num predictors `Area`, `Bedrooms`, `Bathrooms`, `Floors` using ggplot( Grammer of Graphics plot)
+
+```{r}
+cols_num
+```
+
+## By using `For loop`
+
+```{r}
+for (col in cols_num){
+  # Skip 'Price' only during the loop
+  if (col == "Price") next
+  # ggplot
+  plots <- ggplot(house, aes_string(x = col, y = "Price")) +
+               geom_point(color = "green") +
+               geom_smooth(method = "lm", color = "red", se = FALSE) +
+               labs(title = paste("Price by", col))+
+               theme_minimal()
+  
+  print(plots)
+  
+}
+```
 
 ```{r}
 #Price vs. Area
@@ -261,7 +297,7 @@ corrplot(cor_matrix,
 
 **Key Insight:** All correlations are extremely weak (close to 0), with the strongest being `Floors-Price` at only 0.056. This suggests these features alone have very little linear relationship with house `Price` in your dataset.
 
-## 3.5 plots between two variables  categorical vs numeric by all possible combinations.
+## 3.5 plots between two variables categorical vs numeric by all possible combinations.
 
 ```{r}
 plot_categorical_and_continuous_vars <- function(df, categorical_vars, continuous_vars) {
@@ -314,12 +350,26 @@ str(house)
 
 ## 3.6 Box plot
 
+## By using `For Loop`
+
+```{r}
+for (col in cols_fac){
+  boxplot <- ggplot(house, aes_string(x = col, y = 'Price')) +
+        geom_boxplot(fill = "skyblue") +
+        labs(title = paste("Price by", col))+
+        theme_minimal()
+  
+  print(boxplot)
+  
+}
+```
+
 ```{r}
 # Bar plot between YearBuiltBin vs Price (mean value by category)
 library(ggplot2)
  b1 <- ggplot(house, aes_string(x = 'YearBuiltBin', y = 'Price')) +
         geom_boxplot(fill = "skyblue") +
-        ggtitle("Bar Plot YearBuilt vs Price (Mean)") +
+        ggtitle("Box Plot YearBuilt vs Price") +
         theme_minimal()
 b1
 ```
@@ -329,7 +379,7 @@ b1
 library(ggplot2)
  b2 <- ggplot(house, aes_string(x = 'Location', y = 'Price')) +
         geom_boxplot(fill = "skyblue") +
-        ggtitle("Bar Plot Location vs Price (Mean)") +
+        ggtitle("Box Plot Location vs Price") +
         theme_minimal()
 b2
 ```
@@ -338,7 +388,7 @@ b2
 #Price vs. YearBuiltBin
  b3 <- ggplot(house, aes_string(x = 'Condition', y = 'Price')) +
         geom_boxplot(fill = "skyblue") +
-        ggtitle("Bar Plot Condition vs Price (Mean)") +
+        ggtitle("Box Plot Condition vs Price") +
         theme_minimal()
 b3
 ```
@@ -346,7 +396,164 @@ b3
 ```{r}
  b2 <- ggplot(house, aes_string(x = 'Garage', y = 'Price')) +
         geom_boxplot(fill = "skyblue") +
-        ggtitle("Bar Plot Garage vs Price (Mean)") +
+        ggtitle("Box Plot Garage vs Price ") +
         theme_minimal()
 b2
 ```
+
+```{r}
+str(house)
+```
+
+## (1) What are the most significant factors influencing house prices?
+
+```{r}
+model_lm_full <- lm(Price ~.,data=house)
+```
+
+```{r}
+summary(model_lm_full)
+```
+
++------------+---------+--------------------------------------------------------------------------------------------------------------------------+
+| Variable   | p-value | Interpretation with significance level 5%                                                                                |
++============+=========+==========================================================================================================================+
+| Floors     | 0.0114  | Statistically significant predictor variable `Floors` with house `Price` . That means, more floors implies higher price. |
++------------+---------+--------------------------------------------------------------------------------------------------------------------------+
+| All others | \>0.05  | Not statistically significant in this model `model_lm_full`                                                              |
++------------+---------+--------------------------------------------------------------------------------------------------------------------------+
+
+**Conclusion:**
+
+In this model `model_lm_full` , the number of floors is the only strong predictor of `Price` using a simple linear multiple regression model.
+
+Also, R2 =0.01069, implies the model explains only about 1.07% of price variation. This indicates that the relationship is not linear or some important predictors are missing (eg lot size, neighborhood rating, renovations e.t.c.)
+
+## (2) Does the age of a house affect its market value?
+
+```{r}
+options(scipen=999) # turn off scientific notation
+boxplot(Price~YearBuiltBin, data=house,
+        xlab='Year Built',
+        ylab='Price',
+        main='Boxplot of House Price vs Year Built',
+        col='lightblue')
+```
+
+[**Interpretation:**]{.underline}
+
+The age of house is measured by `YearBuiltBin`.
+
+From the summary of the linear multiple regression model `model_lm_full` , all the year built bin coefficients have high p-value \>0.05. So there are no significant effect on the response variable `Price`in the linear model. However, the effect appear on the nonlinear model and may interact with other predictors.
+
+[**Conclusion:**]{.underline}
+
+Although the `YearBuilt` does not significantly predict in this linear model, but
+
+1) we should test interaction effects between predictors.
+
+2) we may need a nonlinear model or log(Price) log transformation.
+
+## (3) Do interactions between variables improve model accuracy?
+
+```{r}
+model_lm_interact <- lm(log(Price) ~ Area*Location + Condition*Location + Bedrooms*Bathrooms, data = house)
+summary(model_lm_interact)
+
+```
+
+## Key summary statistics from output of the model `model_lm_interact` :
+
++---------------------+-----------+------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Metrics             | value     | Interpretation                                                                                                                                             |
++=====================+===========+============================================================================================================================================================+
+| R2                  | 0.01186   | The model explains only about 1.19% of price variation.                                                                                                    |
++---------------------+-----------+------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Adjusted R2         | 0.0008615 | After adjusting for the number of predictors, the model explains about 0.09% of price variation.                                                           |
++---------------------+-----------+------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| F-statistic p-value | 0.3631    | Overall the model is not statistically significant. That means, predictors are not affects the response.                                                   |
++---------------------+-----------+------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+**Conclusion:**
+
+1) The extra interaction terms added complexity without improving predictive power of model. This means, interactions are only beneficial if there is evidence that one variable depends on another variable.
+
+2) The interactions ( like Area\**Location ,Condition\**Location , Bedrooms\*Bathrooms) do not meaningfully change the `Price`.
+
+3) Most of the interaction coefficients have high p-value \>0.05, so they are not statistically significant with the `Price`.
+
+Hence due to all these reasons, i concluded that the model is overfitting without gaining accuracy.
+
+## comparison between `Baseline linear multiple model` vs `interraction model`
+
++-------------------------------------------------------------+--------------+---------------------------------------------------------------------------------------+
+| Model                                                       | Adjusted R2  | Explain                                                                               |
++=============================================================+==============+=======================================================================================+
+| Baseline simple multiple regression model (no interactions) | 0.003213     | \~0.3213% of variation of `Price` accounted in a model against the no. of variables.  |
+|                                                             |              |                                                                                       |
+| ( `model_lm_full`)                                          |              |                                                                                       |
++-------------------------------------------------------------+--------------+---------------------------------------------------------------------------------------+
+| Simple multiple regression model (with interactions)        | 0.0008615    | \~0.086155 of variation of `Price` .                                                  |
+|                                                             |              |                                                                                       |
+| (`model_lm_interact`)                                       |              |                                                                                       |
++-------------------------------------------------------------+--------------+---------------------------------------------------------------------------------------+
+
+Conclusion:
+
+From the comparison table, `model_lm_interact` model is not better as compare to `mode_lm_full` but it still does not explain the `Price` variation.
+
+```{r}
+# Convert factors to dummy variables
+# `-1` drops intercept column
+# house_dummies <- model.matrix(~., data = house) 
+house_dummies <- model.matrix(~.-1, data = house) 
+house_dummies <- as.data.frame(house_dummies)
+```
+
+```{r}
+str(house_dummies)
+```
+
+```{r}
+head(house_dummies)
+```
+
+```{r}
+cor_matrix <- cor(house_dummies, use = "pairwise.complete.obs")
+
+# plot
+corrplot(cor_matrix,
+         method = "color",
+         addCoef.col = "black",
+         number.cex = 0.45,
+         tl.cex = 0.6,
+         tl.col = "black",
+         title = "Correlation Matrix with Dummy Variables",
+         mar = c(0,0,1,0))
+```
+
+```{r}
+str(house_dummies)
+```
+
+```{r}
+model_lm_full <- lm(Price ~.,data=house_dummies)
+```
+
+```{r}
+summary(model_lm_full)
+```
+
+```{r}
+library(car)
+vif(model_lm_full)
+```
+
+```{r}
+```
+
+```{r}
+
+```
+
+0.003213
