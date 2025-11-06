@@ -1,13 +1,6 @@
-```{r}
-getwd()
-setwd("/Users/aavymac/UTSA/FallSemester2025/STA6923-Intro_to_Statistical_Learning/sta6923-project")
-```
+The real estate markets, like those in Sydney and Melbourne, present an interesting opportunity for data analysts to analyze and predict where property prices are moving towards. Prediction of property prices is becoming increasingly important and beneficial. Property prices are a good indicator of both the overall market condition and the economic health of a country. Considering the data provided, we are wrangling a large set of property sales records stored in an unknown format and with unknown data quality issues
 
-You should always include the link or appropriate reference for your data source.
-
-The histogram should be the one you used to visualize the price. How can the price appear to have no association with Area or other variables? If your goal is to predict the price using this dataset, you need to demonstrate at least some potential relationships among the variables.
-
-Please review your data and make any necessary changes as soon as possible.
+Data Source link: <https://www.kaggle.com/code/yaminimeena/house-price-prediction/input>
 
 ## 1. Extraction & Cleaning
 
@@ -28,29 +21,90 @@ colSums(is.na(house))
 **Missing values:** In this dataset, there is no missing values.
 
 ```{r}
-# Function to convert `character` columns to `factor`, removed `Id` 
-df_clean <- function(df) {
-                                        # Identify character columns
-                                        char_cols <- sapply(df, is.character)
-                                        
-                                        # Convert character columns to factors
-                                        df[char_cols] <- lapply(df[char_cols], as.factor)
-                                        # df$YearBuilt <- as.factor(house$YearBuilt)
-                                        
-                                        # Remove 'Id' column
-                                        df <- df[, !names(df) %in% "Id" ]
-                                        # Return updated dataframe
-                                        return(df)
-                                      }
-```
-
-```{r}
-house <- df_clean(house)
+# create new column and convert into factor
+house['TotalRooms'] = house['Bedrooms'] + house['Bathrooms']
 ```
 
 ```{r}
 str(house)
 ```
+
+```{r}
+# Function to convert `character` columns to `factor`, removed `Id` 
+updated_df <- function(df) {
+      
+      # Identify columns that are categorical
+      cat_cols <- c('Bedrooms', 'Bathrooms', 'Floors', 'Location', 'Condition', 'Garage','TotalRooms')
+                                        
+      # Convert categorical columns to factors
+      df[cat_cols] <- lapply(df[cat_cols], as.factor)
+                                        
+      # Remove 'Id' column
+      df <- df[, !names(df) %in% "Id"]
+      # Return updated dataframe
+      return(df)
+}
+
+```
+
+```{r}
+house <- updated_df(house)
+```
+
+```{r}
+str(house)
+```
+
+```{r}
+cols_fac <- names(house)[sapply(house, is.factor)]
+cols_num <- names(house)[sapply(house, is.numeric)]
+cat('cols_fac=>',cols_fac,'\n')
+cat('cols_num=>',cols_num,'\n')
+```
+
+```{r}
+library(e1071)
+skewed <- apply(house[cols_num],2, skewness) # 2 indicates column
+print("skewed of Original Units")
+skewed
+```
+
+```{r}
+library(caret)
+# Apply BoxCox transformation to numeric predictors
+housePP<- preProcess(house,method ="BoxCox")
+```
+
+```{r}
+# Transform the `house` data
+house_trans<- predict(housePP,house)
+```
+
+```{r}
+str(house)
+```
+
+```{r}
+str(house_trans)
+```
+
+```{r}
+histogram(house$Price,
+          xlab="natural units",
+          type="count",
+          main="original")
+```
+
+```{r}
+histogram(house_trans$Price,
+          xlab="log units",
+          type="count",
+          main="log-transformation")
+```
+
+**Interpretation:**
+
+Since skewness is most likely lower, so there is not significant change even after the Box-Cox transformation. Hence we don't need to transformed the features.
 
 ## Binning on `YearBuilt` variable
 
@@ -64,11 +118,16 @@ house$YearBuiltBin <- cut(
 ```
 
 ```{r}
-table(house$YearBuilt)
+table(house$YearBuiltBin)
 ```
 
 ```{r}
-table(house$YearBuiltBin)
+str(house)
+```
+
+```{r}
+# remove `YearBuilt` variabel from dataset `house`
+house <- house[,-5]
 ```
 
 ```{r}
@@ -118,37 +177,20 @@ summary(house)
 
 -   The distribution is almost evenly uniform at each 25 years period from 1900 to 2025.
 
-```{r}
-# remove `YearBuilt` variabel from dataset `house`
-house <- house[,-5]
-```
-
-```{r}
-str(house)
-```
-
-```{r}
-cols_fac <- names(house)[sapply(house, is.factor)]
-cols_num <- names(house)[sapply(house, is.numeric)]
-cat('categorical variables:::>',cols_fac,'\n')
-cat('numeric variables:::>',cols_num,'\n')
-```
-
-```{r}
-library(e1071)
-skewed <- apply(house[cols_num],2, skewness) # 2 indicates column
-print("skewed of Original Units")
-skewed
-```
-
-Since skewness is most likely lower, so we don't need to transformed the features.
-
 ## 3. EDA (Exploration Data Analysis) / Data Visualizations
 
 ## 3.1 Distribution of all numeric predictors including target `Price` w/o transformation
 
 ```{r}
-# Histograms for all predictors in house w/o transformation
+cols_fac <- names(house)[sapply(house, is.factor)]
+cols_num <- names(house)[sapply(house, is.numeric)]
+cat('cols_fac=>',cols_fac,'\n')
+cat('cols_num=>',cols_num,'\n')
+```
+
+```{r}
+options(scipen = 999)   # turn off scientific notation
+# Histograms for all numerical predictors in house w/o transformation
 for (col in cols_num) {
                         hist(house[[col]],
                         main = paste("Original Histogram of", col),
@@ -159,253 +201,53 @@ for (col in cols_num) {
                                   
 ```
 
-```{r}
-library(ggplot2)
-#price distribution
-ggplot(house, aes(x = Price)) +
-geom_histogram(bins=30) +
-labs(title = "Distribution of House Prices")+
-  theme_minimal()
-```
-
-## 3.2 Plotting between all possible two numeric variables
-
-```{r}
-# Load required packages
-  library(GGally)
-  library(ggplot2)
-plot_variable_pairs <- function(df) {
-  
-  
-  # Create pair plot with regression lines
-  ggpairs(df,
-          lower = list(continuous = wrap("smooth", color = "red")),  # regression line
-          diag = list(continuous = wrap("densityDiag", fill = "green")),  # green density plot
-          upper = "blank",  
-          progress = FALSE
-          ) +
-          theme_minimal()
-}
-```
-
-```{r}
-plot_variable_pairs(house[cols_num])
-```
-
-## 3.3 Scatter Plotting for `Price` by num predictors `Area`, `Bedrooms`, `Bathrooms`, `Floors` using ggplot( Grammer of Graphics plot)
+## 3.2 Scatter Plotting for `Price` by num predictors `Area` using ggplot( Grammer of Graphics plot)
 
 ```{r}
 cols_num
 ```
 
-## By using `For loop`
-
 ```{r}
-for (col in cols_num){
-  # Skip 'Price' only during the loop
-  if (col == "Price") next
-  # ggplot
-  plots <- ggplot(house, aes_string(x = col, y = "Price")) +
-               geom_point(color = "green") +
-               geom_smooth(method = "lm", color = "red", se = FALSE) +
-               labs(title = paste("Price by", col))+
-               theme_minimal()
-  
-  print(plots)
-  
-}
-```
-
-```{r}
-#Price vs. Area
-g1 <- ggplot(house, aes(x = Area, y = Price)) +
-            geom_point(color = "green") +
-            geom_smooth(method = "lm", color = "red", se = FALSE) +
-            labs(title = "Price vs. Area", x = "Area", y = "Price") +
-            theme_minimal()
-
-g1
-```
-
-```{r}
-#Price vs. Bedrooms
-g2 <- ggplot(house, aes(x = Bedrooms, y = Price)) + 
-            geom_point(color = "green") +
-            geom_smooth(method = "lm", color = "red", se = FALSE) +
-            labs(title = "Bedrooms vs. Price", x = "Bedrooms", y = "Price") +
-            theme_minimal()
-g2
-```
-
-```{r}
-#Price vs. Bathrooms
-g3 <- ggplot(house, aes(x = Bathrooms, y = Price)) + 
-            geom_point(color = "green") +
-            geom_smooth(method = "lm", color = "red", se = FALSE) +
-            labs(title = "Price vs. Bathrooms", x = "Bathrooms", y = "Price")+ 
-            theme_minimal()
-g3
-```
-
-```{r}
-#Price vs. Floors
-g4 <- ggplot(house, aes(x = Floors, y = Price)) + 
-            geom_point(color = "green") +
-            geom_smooth(method = "lm", color = "red", se = FALSE) +
-            labs(title = "Price vs. Floors", x = "Floors", y = "Price")+ 
-            theme_minimal()
-g4
-```
-
-```{r}
-#Price vs. YearBuiltBin
-g5 <- ggplot(house, aes(x = YearBuiltBin, y = Price)) + 
-            geom_point(color = "green") +
-            geom_smooth(method = "lm", color = "red", se = FALSE) +
-            labs(title = "Price vs. YearBuiltBin", x = "YearBuiltBin", y = "Price")+ 
-            theme_minimal()
-g5
-```
-
-```{r}
-#Price vs. Location
-g6 <- ggplot(house, aes(x = Location, y = Price)) + 
-            geom_point(color = "green") +
-            geom_smooth(method = "lm", color = "red", se = FALSE) +
-            labs(title = "Price vs. Location", x = "Location", y = "Price")+ 
-            theme_minimal()
-g6
-```
-
-## 3.4 Correlation plot
-
-```{r}
-library(corrplot)
-cor_matrix <- cor(house[cols_num])
-cor_matrix
+plot(house$Area, house$Price,
+     main = "Scatter Plot of Price vs Area",
+     xlab = "Area",
+     ylab = "Price",
+     pch = 19,
+     col = "blue")
+abline(lm(Price ~ Area, data = house), col = "red", lwd = 2)
 
 ```
 
-```{r}
-corrplot(cor_matrix,
-         method="number",
-         order="hclust",
-         tl.cex=.35,
-         title = "Correlation Matrix of numeric transformed Predictor Variables",
-         mar = c(0, 0, 2, 0))
-```
-
-**Key Insight:** All correlations are extremely weak (close to 0), with the strongest being `Floors-Price` at only 0.056. This suggests these features alone have very little linear relationship with house `Price` in your dataset.
-
-## 3.5 plots between two variables categorical vs numeric by all possible combinations.
-
-```{r}
-plot_categorical_and_continuous_vars <- function(df, categorical_vars, continuous_vars) {
-  library(ggplot2)
-  library(ggbeeswarm)   # for swarm-like plots
-  library(gridExtra)    # to arrange multiple plots
-
-  for (cat_var in categorical_vars) {
-    for (cont_var in continuous_vars) {
-
-      # Boxplot
-      p1 <- ggplot(df, aes_string(x = cat_var, y = cont_var)) +
-        geom_boxplot(fill = "skyblue") +
-        ggtitle("Boxplot") +
-        theme_minimal()
-
-      # Bar plot (mean value by category)
-      p2 <- ggplot(df, aes_string(x = cat_var, y = cont_var)) +
-        stat_summary(fun = mean, geom = "bar", fill = "lightgreen") +
-        ggtitle("Bar Plot (Mean)") +
-        theme_minimal()
-
-      # Scatter plot (jittered to avoid overlap)
-      p3 <- ggplot(df, aes_string(x = cat_var, y = cont_var)) +
-        geom_jitter(width = 0.2, color = "tomato") +
-        ggtitle("Scatter Plot") +
-        theme_minimal()
-
-      # Swarm plot (bee swarm)
-      p4 <- ggplot(df, aes_string(x = cat_var, y = cont_var)) +
-        geom_quasirandom(color = "purple") +
-        ggtitle("Swarm Plot") +
-        theme_minimal()
-
-      # Arrange the four plots in a grid (like plt.subplot)
-      grid.arrange(p1, p2, p3, p4, ncol = 4)
-    }
-  }
-}
-
-```
-
-```{r}
-plot_categorical_and_continuous_vars(house,cols_fac,cols_num)
-```
-
-```{r}
-str(house)
-```
-
-## 3.6 Box plot
-
-## By using `For Loop`
+## 3.3 Box plot `Price` vs `categorical predictors` by using `For loop`
 
 ```{r}
 for (col in cols_fac){
   boxplot <- ggplot(house, aes_string(x = col, y = 'Price')) +
-        geom_boxplot(fill = "skyblue") +
-        labs(title = paste("Price by", col))+
-        theme_minimal()
+             geom_boxplot(fill = "skyblue") +
+             labs(title = paste("Price by", col))+
+             theme_minimal()
+        
   
   print(boxplot)
   
 }
 ```
 
-```{r}
-# Bar plot between YearBuiltBin vs Price (mean value by category)
-library(ggplot2)
- b1 <- ggplot(house, aes_string(x = 'YearBuiltBin', y = 'Price')) +
-        geom_boxplot(fill = "skyblue") +
-        ggtitle("Box Plot YearBuilt vs Price") +
-        theme_minimal()
-b1
-```
+**Key Insight:** All predictors do not have outliers, so they are not making noises. All correlations are extremely weak (close to 0), with the strongest being `Floors-Price` at only 0.056. This suggests these features alone have very little linear relationship with house `Price` in your dataset.
 
-```{r}
-# Bar plot between Location vs Price (mean value by category)
-library(ggplot2)
- b2 <- ggplot(house, aes_string(x = 'Location', y = 'Price')) +
-        geom_boxplot(fill = "skyblue") +
-        ggtitle("Box Plot Location vs Price") +
-        theme_minimal()
-b2
-```
+**Potential Data Challenges**
 
-```{r}
-#Price vs. YearBuiltBin
- b3 <- ggplot(house, aes_string(x = 'Condition', y = 'Price')) +
-        geom_boxplot(fill = "skyblue") +
-        ggtitle("Box Plot Condition vs Price") +
-        theme_minimal()
-b3
-```
+Although the dataset is clean and well-structured, several limitations should be noted:
+● Outliers in Area and Price: Although it does not have explicit NA’s, extremely high values are likely in these two variables.
+● YearBuilt transformation: The range of this variable is from 1900–2023. If we don’t transform it, it may affect the model performance.
+● Geographic bias: The variable Location only describes some neighborhoods (e.g.downtown, urban, etc.), this may not generalize all the house market.
+● Heteroskedasticity: Higher-priced homes show bigger prediction errors, suggesting a log transformation of Price may be needed.
 
-```{r}
- b2 <- ggplot(house, aes_string(x = 'Garage', y = 'Price')) +
-        geom_boxplot(fill = "skyblue") +
-        ggtitle("Box Plot Garage vs Price ") +
-        theme_minimal()
-b2
-```
+## (1) What are the most significant factors influencing house prices?
 
 ```{r}
 str(house)
 ```
-
-## (1) What are the most significant factors influencing house prices?
 
 ```{r}
 model_lm_full <- lm(Price ~.,data=house)
@@ -415,19 +257,11 @@ model_lm_full <- lm(Price ~.,data=house)
 summary(model_lm_full)
 ```
 
-+------------+---------+--------------------------------------------------------------------------------------------------------------------------+
-| Variable   | p-value | Interpretation with significance level 5%                                                                                |
-+============+=========+==========================================================================================================================+
-| Floors     | 0.0114  | Statistically significant predictor variable `Floors` with house `Price` . That means, more floors implies higher price. |
-+------------+---------+--------------------------------------------------------------------------------------------------------------------------+
-| All others | \>0.05  | Not statistically significant in this model `model_lm_full`                                                              |
-+------------+---------+--------------------------------------------------------------------------------------------------------------------------+
+Interpretation: At 5% significance level, the predictors `Bathrooms2` ,`Floor3`,`TotalRooms4`, `TotalRooms6` are the statisitically significant with the response variable `Price`. In other words, these are the influencing factors for the `house price`. Similarly, at 10% significance level, the predictors `ConditionFair`, `TotalRooms3`, `YearBuiltBin1951-1975` are the influencing factors for the `house price`. Since F-statistic p-value is 0.04985\<0.05, Overall the model is statistically significant. That means, at least one predictors are affects the response.
 
 **Conclusion:**
 
-In this model `model_lm_full` , the number of floors is the only strong predictor of `Price` using a simple linear multiple regression model.
-
-Also, R2 =0.01069, implies the model explains only about 1.07% of price variation. This indicates that the relationship is not linear or some important predictors are missing (eg lot size, neighborhood rating, renovations e.t.c.)
+In this model `model_lm_full` , the number of floors, bedrooms, & total rooms are the strong predictor of `Price` using a simple linear multiple regression model.Also, R2 =0.02002, implies the model explains only about 2% of price variation. This indicates that the relationship is not linear or some important predictors are missing (eg lot size, neighborhood rating, renovations e.t.c.)
 
 ## (2) Does the age of a house affect its market value?
 
@@ -450,9 +284,9 @@ From the summary of the linear multiple regression model `model_lm_full` , all t
 
 Although the `YearBuilt` does not significantly predict in this linear model, but
 
-1) we should test interaction effects between predictors.
+1)  we should test interaction effects between predictors.
 
-2) we may need a nonlinear model or log(Price) log transformation.
+2)  we may need a nonlinear model or log(Price) log transformation.
 
 ## (3) Do interactions between variables improve model accuracy?
 
@@ -464,39 +298,39 @@ summary(model_lm_interact)
 
 ## Key summary statistics from output of the model `model_lm_interact` :
 
-+---------------------+-----------+------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| Metrics             | value     | Interpretation                                                                                                                                             |
-+=====================+===========+============================================================================================================================================================+
-| R2                  | 0.01186   | The model explains only about 1.19% of price variation.                                                                                                    |
-+---------------------+-----------+------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| Adjusted R2         | 0.0008615 | After adjusting for the number of predictors, the model explains about 0.09% of price variation.                                                           |
-+---------------------+-----------+------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| F-statistic p-value | 0.3631    | Overall the model is not statistically significant. That means, predictors are not affects the response.                                                   |
-+---------------------+-----------+------------------------------------------------------------------------------------------------------------------------------------------------------------+
++---------------------+----------+------------------------------------------------------------------------------------------------------------------+
+| Metrics             | value    | Interpretation                                                                                                   |
++=====================+==========+==================================================================================================================+
+| R2                  | 0.02376  | The model explains only about 2% of price variation.                                                             |
++---------------------+----------+------------------------------------------------------------------------------------------------------------------+
+| Adjusted R2         | 0.004845 | After adjusting for the number of predictors, the model explains about 0.09% of price variation.                 |
++---------------------+----------+------------------------------------------------------------------------------------------------------------------+
+| F-statistic p-value | 0.1369   | Overall the model is not statistically significant. That means, the interactions does not affects the response.  |
++---------------------+----------+------------------------------------------------------------------------------------------------------------------+
 
 **Conclusion:**
 
-1) The extra interaction terms added complexity without improving predictive power of model. This means, interactions are only beneficial if there is evidence that one variable depends on another variable.
+1)  The extra interaction terms added complexity without improving predictive power of model. This means, interactions are only beneficial if there is evidence that one variable depends on another variable.
 
-2) The interactions ( like Area\**Location ,Condition\**Location , Bedrooms\*Bathrooms) do not meaningfully change the `Price`.
+2)  The interactions ( like Area\**Location ,Condition\**Location , Bedrooms\*Bathrooms) do not meaningfully change the `Price`.
 
-3) Most of the interaction coefficients have high p-value \>0.05, so they are not statistically significant with the `Price`.
+3)  Most of the interaction coefficients have high p-value \>0.05, so they are not statistically significant with the `Price`.
 
 Hence due to all these reasons, i concluded that the model is overfitting without gaining accuracy.
 
 ## comparison between `Baseline linear multiple model` vs `interraction model`
 
-+-------------------------------------------------------------+--------------+---------------------------------------------------------------------------------------+
-| Model                                                       | Adjusted R2  | Explain                                                                               |
-+=============================================================+==============+=======================================================================================+
-| Baseline simple multiple regression model (no interactions) | 0.003213     | \~0.3213% of variation of `Price` accounted in a model against the no. of variables.  |
-|                                                             |              |                                                                                       |
-| ( `model_lm_full`)                                          |              |                                                                                       |
-+-------------------------------------------------------------+--------------+---------------------------------------------------------------------------------------+
-| Simple multiple regression model (with interactions)        | 0.0008615    | \~0.086155 of variation of `Price` .                                                  |
-|                                                             |              |                                                                                       |
-| (`model_lm_interact`)                                       |              |                                                                                       |
-+-------------------------------------------------------------+--------------+---------------------------------------------------------------------------------------+
++-------------------------------------------------------------+-------------+--------------------------------------------------------------------------------------+
+| Model                                                       | Adjusted R2 | Explain                                                                              |
++=============================================================+=============+======================================================================================+
+| Baseline simple multiple regression model (no interactions) | 0.003213    | \~0.3213% of variation of `Price` accounted in a model against the no. of variables. |
+|                                                             |             |                                                                                      |
+| ( `model_lm_full`)                                          |             |                                                                                      |
++-------------------------------------------------------------+-------------+--------------------------------------------------------------------------------------+
+| Simple multiple regression model (with interactions)        | 0.0008615   | \~0.086155 of variation of `Price` .                                                 |
+|                                                             |             |                                                                                      |
+| (`model_lm_interact`)                                       |             |                                                                                      |
++-------------------------------------------------------------+-------------+--------------------------------------------------------------------------------------+
 
 Conclusion:
 
@@ -519,6 +353,7 @@ head(house_dummies)
 ```
 
 ```{r}
+library(corrplot)
 cor_matrix <- cor(house_dummies, use = "pairwise.complete.obs")
 
 # plot
@@ -546,7 +381,7 @@ summary(model_lm_full)
 
 ```{r}
 library(car)
-vif(model_lm_full)
+# vif(model_lm_full)
 ```
 
 ```{r}
@@ -555,5 +390,3 @@ vif(model_lm_full)
 ```{r}
 
 ```
-
-0.003213
