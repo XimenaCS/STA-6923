@@ -1,0 +1,486 @@
+# House Price Prediction Analysis
+
+The real estate markets, like those in Sydney and Melbourne, present an interesting opportunity for data analysts to analyze and predict where property prices are moving towards. Prediction of property prices is becoming increasingly important and beneficial. Property prices are a good indicator of both the overall market condition and the economic health of a country. Considering the data provided, we are wrangling a large set of property sales records stored in an unknown format and with unknown data quality issues
+
+Data Source link: <https://www.kaggle.com/datasets/zafarali27/house-price-prediction-dataset/data>
+
+## 1. Introduction & Data Loading
+
+The objective of this analysis is to build a regression model to predict the `Price` of a house based on the provided dataset. We will perform a rigorous analysis, including exploratory data analysis, feature engineering, and a comparison of multiple model types (linear, regularized, and non-linear) to find the model with the highest predictive power (R²).
+
+### 1.1 Load Libraries
+
+We begin by loading all necessary R packages for analysis, visualization, and modeling.
+
+```{r, echo=FALSE}
+#Function to hide libraries messages and warnings
+knitr::opts_chunk$set(
+  message = FALSE,  
+  warning = FALSE 
+)
+```
+
+```{r}
+library(dplyr)          # data manipulation
+library(e1071)          # skewness
+library(ggplot2)        # data visualizations
+library(gridExtra)      # for arranging multiple ggplots into one figure
+library(corrplot)       # correlation matrix visualization 
+library(RColorBrewer)   # color palettes for plots
+library(caret)          # train/test splitting
+library(glmnet)         # Ridge, LASSO, Elastic Net
+library(randomForest)   # Random Forest 
+library(gbm)            # Gradient Boosting 
+library(car)            # Multicollinearity
+
+```
+
+### 1.2 Load Dataset
+
+We upload the csv file to R and check the structure of the dataset and take a look to the first rows.
+
+```{r}
+house<- read.csv("House Price Prediction Dataset.csv")
+head(house,3) #print first 3 rows
+```
+
+## 2. Descriptive Statistics & Data Overview:
+
+### 2.1 Structure
+
+The dataset has 2000 observations and 10 variables. `Location`, `Condition`, and `Garage` should be converted from `character` to `factor` for modeling.
+
+```{r}
+str(house)
+```
+
+### 2.2 Data Cleaning
+
+No missing values were detected in the dataset.
+
+```{r}
+colSums(is.na(house))
+```
+
+We convert 'Bedrooms', 'Bathrooms', 'Floors', 'Location', 'Condition', and 'Garage' variables into factors.
+
+```{r}
+# Function to convert columns to `factor`, removed `Id` 
+updated_df <- function(df) {
+      cat_cols <- c('Bedrooms', 'Bathrooms', 'Floors', 'Location', 'Condition', 'Garage')
+      # Convert categorical columns to factors
+      df[cat_cols] <- lapply(df[cat_cols], as.factor)
+      # Remove 'Id' column
+      df <- df[, !names(df) %in% "Id"]
+      return(df)
+}
+house_v2 <- updated_df(house)
+```
+
+The updated house_v2 dataset is well-structured, with numeric fields balanced and categorical variables properly encoded as factors with fairly balanced distributions. No obvious outliers like negative areas or Floors outside the expected range.
+
+```{r}
+summary(house_v2)
+```
+
+### 2.3 Skewness
+
+The skewness values for the numeric variables are all very close to 0, indicating that all variables are symmetric and do not require transformation.
+
+```{r}
+cols_num <- names(house_v2)[sapply(house_v2, is.numeric)]
+skewed <- apply(house[cols_num],2, skewness) # 2 indicates column
+print("skewed of Original Units")
+skewed
+```
+
+## 3. Exploration Data Analysis (EDA)
+
+### 3.1 Distribution of numeric variables
+
+The `Area` of the homes is spread out across the full range, without any heavy tail.
+
+The `YearBuilt` values are fairly evenly distributed across the decades, giving the dataset a mix of older and newer homes.
+
+The distribution of home `Price` is fairly uniform across the full range, with a slight linear trend.
+
+```{r}
+plots <- list()
+
+for (col in cols_num) {
+  p <- ggplot(house_v2, aes(x = .data[[col]])) +
+    geom_histogram(bins = 40, fill = "skyblue", color = "white") +
+    labs(title = paste("Histogram of", col)) +
+    theme_minimal()
+
+  plots[[col]] <- p
+}
+
+grid.arrange(grobs = plots, ncol = 1) # Arrange all plots in a 1x3 grid
+```
+
+### 3.2 Distribution of categorical/factor variables
+
+The pie charts provide an overview of the distribution of each categorical variable in the dataset. Overall, the categories appear relatively well balanced, with no extreme skews. `Bedrooms`, `Bathrooms`, and `Floors` show moderate variation across their levels, while `Garage` availability is split almost 50/50 between “Yes” and “No.
+
+```{r}
+cols_pie <- c("Bedrooms","Bathrooms","Floors","Garage","Condition","Location")
+
+par(mfrow = c(2, 3),
+    #smaller margins
+    mar   = c(1, 1, 3, 1),   
+    oma   = c(0, 0, 2, 0))
+
+for (col in cols_pie) {
+  counts <- table(house_v2[[col]])
+  pct    <- round(100 * counts / sum(counts))
+  lbls   <- paste0(names(counts), " (", pct, "%)") #format labels
+  pal <- colorRampPalette(brewer.pal(12, "Set3"))(length(counts)) #color palette
+  pie(counts,
+      labels = lbls,
+      main   = col,
+      col    = pal)
+}
+```
+
+### 3.3 Box plot `Price` vs `categorical predictors`
+
+The boxplots illustrate how housing prices vary across the different categories of each factor variable. Overall, price distributions appear broadly consistent across most groups, with similar medians and interquartile ranges, suggesting that these variables have not a visible influence on `Price` distribution
+
+```{r}
+cols_boxplot <- c("Bedrooms","Bathrooms","Floors","Garage","Condition","Location")
+
+plot_list <- list()
+
+for (col in cols_boxplot) {
+  p <- ggplot(house_v2, aes_string(x = col, y = "Price")) +
+    geom_boxplot(fill = "gold3") +
+    labs(title = paste("Price by", col)) +
+    theme_minimal()
+  
+  plot_list[[col]] <- p
+}
+
+grid.arrange(grobs = plot_list, ncol = 2) # Arrange all plots in a 2x3 grid
+```
+
+### 3.4 Scatter Plotting for `Price` vs `Area`
+
+The scatter points are spread uniformly across the entire range of `Area` values. There is no visible trend, prices appear randomly distributed regardless of area. The red line (regression line) is horizontal, indicating that `Area` has no visual linear effect on `Price`.
+
+```{r}
+plot(house_v2$Area, house_v2$Price,
+     main = "Scatter Plot of Price vs Area",
+     xlab = "Area",
+     ylab = "Price",
+     pch = 19,
+     col = "lightgreen")
+abline(lm(Price ~ Area, data = house), col = "red", lwd = 2)
+```
+
+### 3.5 Correlation Matrix
+
+The predictors show weak linear correlation with `Price`, all pairwise correlations with Price are \~0 indicating no clear relationship. The only clear patterns appear along the dummy-variable groups (`Bedrooms, Bathrooms, Location, Condition, Floor`), which naturally correlate within their own categories.
+
+```{r}
+# Convert factors to dummy variables
+df_dummies <- model.matrix(~ . - 1, data = house_v2) 
+cor_matrix <- cor(df_dummies, use = "pairwise.complete.obs")
+
+corrplot(cor_matrix,
+         method = "color",
+         addCoef.col = "black",
+         number.cex = 0.45,
+         tl.cex = 0.6,
+         tl.col = "black",
+         title = "Correlation Matrix with Dummy Variables",
+         mar = c(0,0,1,0))
+```
+
+### 3.6 EDA Conclusion
+
+Based on the EDA, `Price` shows weak relationships with the predictors, meaning the variables appear statistically independent of one another. Although this could point to a simplified or simulated dataset, we will continue with preprocessing and feature engineering to build a regression model and evaluate performance.
+
+## 4. Feature Engineering and Data Split
+
+### 4.1 Binning on `YearBuilt` variable
+
+We group `YearBuilt` variable into 5 period bins to simplify the distribution. The groups are fairly balanced as expected.
+
+```{r}
+house_v2$YearBuiltBin <- cut(
+                    house_v2$YearBuilt,
+                    breaks = c(1900, 1925,1950, 1975, 2000, 2025),
+                    labels = c("1900–1925", "1926–1950", "1951-1975", "1976–2000", "2001–2025"),
+                    include.lowest = TRUE
+                  )
+table(house_v2$YearBuiltBin)
+house_v2 <- house_v2 %>% select(-YearBuilt)
+```
+
+### 4.2 Creating new variables
+
+One new features was added: `Area_per_Room`. This variable provide alternative representations of space allocation that may offer a better predictive model.
+
+```{r}
+house_v3 <- house_v2 %>%
+  mutate(
+    Area_per_Room = Area / (as.numeric(as.character(Bedrooms)) + 
+                 as.numeric(as.character(Bathrooms)))
+  )
+summary(house_v3)
+```
+
+### 4.3 Train/Test Data Split
+
+A 70/30 train–test split was created using a fixed seed for reproducibility. This ensures that the model is trained on one portion of the data while performance is evaluated on an independent subset.
+
+```{r}
+# Set seed for reproducibility
+set.seed(1)
+
+# Create training (70%) and testing (30%) sets
+train_index <- createDataPartition(house_v3$Price, p = 0.7, list = FALSE)
+train_data <- house_v3[train_index, ]
+test_data <- house_v3[-train_index, ]
+
+x_train <- model.matrix(Price ~ ., data = train_data)[, -1]
+y_train <- train_data$Price
+
+x_test  <- model.matrix(Price ~ ., data = test_data)[, -1]
+y_test  <- test_data$Price
+
+# Performance function
+model_performance <- function(actual, predicted) {
+  postResample(pred = predicted, obs = actual)
+}
+```
+
+## 5. Modeling
+
+### 5.1 Multiple Linear Regression
+
+The multiple linear regression has R² ≈ 0.0023 and very high RMSE (\~279K) relative to the price range, indicating poor predictive performance. Only a few predictors (`Area, Bathroom levels, Floors3, Area_per_Room`) are significant. With alpha = 0.05, the overall F-test is not strongly significant (p ≈ 0.11). The VIF results indicate generally low multicollinearity, with the only mildly concerning predictor `Area_per_Room`, which suggests moderate correlation but not enough to threaten model stability.
+
+```{r}
+lm_model <- lm(Price ~ ., data = train_data)
+summary(lm_model)
+
+lm_pred <- predict(lm_model, newdata = test_data)
+lm_perf <- model_performance(y_test, lm_pred)
+lm_perf
+vif(lm_model) #check multicollinearity
+```
+
+### 5.2 LogPrice
+
+Applying a log transformation to `Price` results in a modest improvement in model fit, with a slightly lower residual error and a statistically significant overall F-test. Several predictors become significant under the transformed scale; however, the model still explains only a very small portion of the variance (R² \~ 0.026), and test performance remains weak, indicating that it does not materially improve predictive performance compared to the linear model.
+
+```{r}
+lm_log_model <- lm(log(Price) ~ ., data = train_data)
+summary(lm_log_model)
+
+# Predict in log space, then back-transform
+lm_log_pred_log <- predict(lm_log_model, newdata = test_data)
+lm_log_pred     <- exp(lm_log_pred_log)
+
+lm_log_perf <- model_performance(y_test, lm_log_pred)
+lm_log_perf
+```
+
+### 5.3 LogPrice + interactions
+
+Adding `YearBuiltBin` and interaction terms between `Bedrooms, Bathrooms, Location`, and `Area_per_Room` produces a slight increase in in-sample fit (R² \~ 0.02, F-test p \~ 0.005), and a few interaction effects (for example, `Suburban` × `Area_per_Room`) become statistically significant. However, test performance remains weak (RMSE \~ 295K), so the additional complexity offers little practical gain over the simpler log-linear model.
+
+```{r}
+lm_log_int_model <- lm(log(Price) ~ Area  +YearBuiltBin + Floors + Bedrooms*Bathrooms + Location*Area_per_Room , data = train_data)
+summary(lm_log_int_model)
+
+# Predict in log space, then back-transform
+lm_log_int_pred_log <- predict(lm_log_int_model, newdata = test_data)
+lm_log_int_pred     <- exp(lm_log_int_pred_log)
+
+lm_log_int_perf <- model_performance(y_test, lm_log_int_pred)
+lm_log_int_perf
+```
+
+### 5.4 LASSO
+
+The LASSO model was fit using 10-fold cross-validation to select the optimal regularization parameter. The model reduces several coefficients toward 0 as expected, and the resulting test performance (RMSE \~277K) is similar to the MLR models, indicating that LASSO does not substantially improve predictive accuracy.
+
+```{r}
+set.seed(1)
+lasso_cv <- cv.glmnet(
+  x_train, y_train,
+  alpha = 1,              # LASSO
+  nfolds = 10
+)
+
+plot(lasso_cv)
+lasso_model <- glmnet(
+  x_train, y_train,
+  alpha = 1,
+  lambda = lasso_cv$lambda.min
+)
+
+lasso_pred <- predict(lasso_model, newx = x_test)
+lasso_perf <- model_performance(y_test, as.numeric(lasso_pred))
+lasso_perf
+```
+
+### 5.5 Ridge
+
+Ridge regression was tuned using 10-fold cross-validation to select the optimal penalty value. The model stabilizes coefficient estimates as expected, but the test results (RMSE \~ 277K and R² \~ 0.0007) show little improvement compared with the previous linear and LASSO models, indicating that Ridge does not substantially improve predictive accuracy.
+
+```{r}
+set.seed(1)
+ridge_cv <- cv.glmnet(
+  x_train, y_train,
+  alpha = 0,              # Ridge
+  nfolds = 10
+)
+
+plot(ridge_cv)
+ridge_model <- glmnet(
+  x_train, y_train,
+  alpha = 0,
+  lambda = ridge_cv$lambda.min
+)
+
+ridge_pred <- predict(ridge_model, newx = x_test)
+ridge_perf <- model_performance(y_test, as.numeric(ridge_pred))
+ridge_perf
+```
+
+### 5.6 Elastic Net
+
+Elastic Net, which combines both LASSO and Ridge penalties, was tuned using 10-fold cross-validation to select its optimal regularization strength. The model performs similarly to the individual LASSO and Ridge models, with test metrics (RMSE ≈ 277K and R² ≈ 0.0015) showing only minimal improvement. This indicates that blending the two regularization methods does not substantially enhance predictive accuracy.
+
+```{r}
+set.seed(1)
+elastic_cv <- cv.glmnet(
+  x_train, y_train,
+  alpha = 0.5,            # mix of LASSO and Ridge
+  nfolds = 10
+)
+
+plot(elastic_cv)
+elastic_model <- glmnet(
+  x_train, y_train,
+  alpha = 0.5,
+  lambda = elastic_cv$lambda.min
+)
+
+elastic_pred <- predict(elastic_model, newx = x_test)
+elastic_perf <- model_performance(y_test, as.numeric(elastic_pred))
+elastic_perf
+```
+
+### 5.7 Random Forest
+
+The random forest model was trained with 500 trees and a default heuristic for the number of variables considered at each split. The overall predictive performance remains weak, with a test RMSE \~ 284K and an R² \~ 0. This indicates that the random forest does not capture meaningful nonlinear relationships in the data and performs similarly to the earlier linear and regularized models.
+
+```{r}
+set.seed(1)
+rf_model <- randomForest(
+  Price ~ ., 
+  data = train_data,
+  ntree = 500,
+  mtry  = floor(sqrt(ncol(train_data) - 1)),  # simple heuristic
+  importance = TRUE
+)
+
+print(rf_model)
+varImpPlot(rf_model)
+
+rf_pred <- predict(rf_model, newdata = test_data)
+rf_perf <- model_performance(test_data$Price, rf_pred)
+rf_perf
+```
+
+### 5.8 Gradient Boosting
+
+Gradient boosting highlights `Area`, `Area_per_Room`, and `YearBuilt` as the most influential predictors. However, test performance (RMSE ≈ 277K, R² ≈ 0.002) is similar to the other models, indicating that boosting does not yield a meaningful improvement in predictive accuracy for this dataset.
+
+```{r}
+set.seed(1)
+gbm_model <- gbm(
+  formula = Price ~ .,
+  data    = train_data,
+  distribution = "gaussian",
+  n.trees     = 2000,
+  interaction.depth = 3,
+  shrinkage   = 0.01,
+  n.minobsinnode = 10,
+  bag.fraction = 0.8,
+  train.fraction = 1.0,
+  verbose = FALSE
+)
+
+summary(gbm_model)
+best_iter <- gbm.perf(gbm_model, method = "OOB", plot.it = FALSE)
+
+gbm_pred <- predict(
+  gbm_model,
+  newdata = test_data,
+  n.trees = best_iter
+)
+
+gbm_perf <- model_performance(test_data$Price, gbm_pred)
+gbm_perf
+```
+
+## 6. Interpretation and Model Selection
+
+### 6.1 Model Comparison
+
+Error levels are very similar across models. RMSE range is between \~277K and \~295K, and MAE is around \~240K–251K.
+
+R² is \~ 0 for all models. Even the best model explains less than 0.5% of the variance in `Price`, indicating that almost all variation in prices remains unexplained by the available predictors.
+
+Regularized linear models perform slightly better than plain OLS and tree-based models. Elastic Net, LASSO, and Ridge give the lowest RMSE and MAE, but the differences are practically small.
+
+Overall, these results suggest that no model is able to actually predict the house price with the given data.
+
+```{r}
+model_results <- bind_rows(
+  data.frame(Model = "Linear",        t(lm_perf)),
+  data.frame(Model = "Log-Linear",    t(lm_log_perf)),
+  data.frame(Model = "Log-Linear + Interactions", t(lm_log_int_perf)),
+  data.frame(Model = "LASSO",         t(lasso_perf)),
+  data.frame(Model = "Ridge",         t(ridge_perf)),
+  data.frame(Model = "Elastic Net",   t(elastic_perf)),
+  data.frame(Model = "Random Forest", t(rf_perf)),
+  data.frame(Model = "Gradient Boosting", t(gbm_perf))
+)
+
+model_results <- model_results %>%
+  arrange(RMSE)   # lower RMSE is better
+
+model_results
+
+```
+
+### 6.2 Selected model
+
+Because all models performed similarly, model selection is driven more by simplicity and stability than by accuracy:
+
+-   The Elastic Net model has the lowest RMSE and MAE in the comparison table, while also handling multicollinearity and selecting useful features automatically.
+
+-   Its structure is close to a linear model, which makes its coefficients easier to interpret compared with more complex models.
+
+-   Although its improvement over LASSO and Ridge is small, Elastic Net offers a good middle ground between the two methods.
+
+For these reasons, Elastic Net is chosen as the "best" model. However, the very low R² and relatively high errors show that the model has limited ability to explain or predict housing prices in this dataset.
+
+### 6.3 Limitations
+
+The modeling results highlight several limitations of the dataset:
+
+-   The available predictors (area, number of rooms , location category, condition indicators, etc.) do not appear to capture the key factors that typically drive housing prices in the real world. Important variables such as detailed neighborhood attributes, proximity to services, and market conditions are missing.
+
+-   The weak relationships between Price and the predictors, observed both in the exploratory analysis and in the models’ low R² values, suggest that the dataset may be simulated.
+
+-   Because all models perform similarly and none achieve meaningful predictive accuracy, increasing model complexity is unlikely to provide substantial improvement without better predictors.
+
+In summary, although Elastic Net is reported as the selected model, the broader conclusion is that this dataset is not suitable for accurate house price prediction. Practical use would require collecting more informative variables or revisiting how the data were generated to ensure that realistic price–feature relationships exist.
