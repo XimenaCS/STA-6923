@@ -1,0 +1,567 @@
+# House Price Prediction Analysis
+
+**Authors**: `Dulce Ximena Cid Sanabria` & `Sikandar Shrestha`
+
+This dataset provides key features for predicting house prices, including area, bedrooms, bathrooms, stories, amenities like air conditioning and parking, and information on furnishing status. It enables analysis and modelling to understand the factors impacting house prices and develop accurate predictions in real estate markets.
+
+**NOTE:-** For final Report, `Professor Dengdeng Yu` suggested us in the presentation day that work on some new dataset ( we have taken **"Housing.csv"**). Because of the model is not working well on the initial taken dataset "**House Price Prediction Dataset.csv**".
+
+New Data Source link: <https://www.kaggle.com/datasets/harishkumardatalab/housing-price-prediction>
+
+This dataset provides comprehensive information for house price prediction, with 13 column names:
+
+1.  **Price:** The price of the house.
+
+2.  **Area:** The total area of the house in square feet.
+
+3.  **Bedrooms:** The number of bedrooms in the house.
+
+4.  **Bathrooms:** The number of bathrooms in the house.
+
+5.  **Stories:** The number of stories in the house.
+
+6.  **Mainroad:** Whether the house is connected to the main road (Yes/No).
+
+7.  **Guestroom:** Whether the house has a guest room (Yes/No).
+
+8.  **Basement:** Whether the house has a basement (Yes/No).
+
+9.  **Hot water heating:** Whether the house has a hot water heating system (Yes/No).
+
+10. **Airconditioning:** Whether the house has an air conditioning system (Yes/No).
+
+11. **Parking:** The number of parking spaces available within the house.
+
+12. **Prefarea:** Whether the house is located in a preferred area (Yes/No).
+
+13. **Furnishing status:** The furnishing status of the house (Fully Furnished, Semi-Furnished, Unfurnished).
+
+## 1. Introduction & Data Loading
+
+The objective of this analysis is to build a regression model to predict the `Price` of a house based on the provided dataset. We performed a rigorous analysis, including exploratory data analysis, and a comparison of multiple model types (linear, regularized, and non-linear) to find the model with the highest predictive power (R²).
+
+### 1.1 Load Libraries
+
+We load all necessary R packages for analysis, visualization, and modeling.
+
+```{r, echo=FALSE}
+#Function to hide libraries messages and warnings
+knitr::opts_chunk$set(
+  message = FALSE,  
+  warning = FALSE 
+)
+```
+
+```{r}
+library(dplyr)          # data manipulation
+library(e1071)          # skewness
+library(ggplot2)        # data visualizations
+library(gridExtra)      # for arranging multiple ggplots into one figure
+library(corrplot)       # correlation matrix visualization 
+library(RColorBrewer)   # color palettes for plots
+library(caret)          # train/test splitting
+library(glmnet)         # Ridge, LASSO, Elastic Net
+library(randomForest)   # Random Forest 
+library(gbm)            # Gradient Boosting 
+library(car)            # Multicollinearity
+
+```
+
+### 1.2 Load Dataset
+
+We upload the csv file to R and check the structure of the dataset and take a look to the first rows.
+
+```{r}
+house<- read.csv("Housing.csv")
+head(house,3) #print first 3 rows
+```
+
+## 2. Descriptive Statistics & Data Overview:
+
+### 2.1 Structure
+
+The dataset has 545 observations and 13 variables. 'bedrooms','bathrooms','stories', 'mainroad', 'guestroom', 'basement', 'hotwaterheating', 'airconditioning', 'parking', 'prefarea', 'furnishingstatus' should be converted from `character` to `factor` for modeling.
+
+```{r}
+str(house)
+```
+
+### 2.2 Data Cleaning
+
+The updated house_v2 dataset is well-structured, with numeric fields balanced and categorical variables properly encoded as factors with fairly balanced distributions. All variables are fully observed with no missing values, making this a clean and complete case dataset suitable for statistical analysis and predictive modeling without need for data imputation or removal of records.
+
+```{r}
+# to check the missing values in the dataset
+colSums(is.na(house))
+```
+
+We convert 'bedrooms', 'bathrooms', 'stories', 'mainroad', 'guestroom', 'basement', 'hotwaterheating', 'airconditioning', 'parking', 'prefarea', 'furnishingstatus' variables into factors.
+
+```{r}
+# Function to convert columns to `factor` 
+updated_df <- function(df) {
+      # categorical variables
+      cat_cols <- c('bedrooms','bathrooms','stories', 'mainroad', 'guestroom', 'basement','hotwaterheating','airconditioning','parking','prefarea','furnishingstatus')
+      # Convert  columns to factors
+      df[cat_cols] <- lapply(df[cat_cols], as.factor)
+
+      return(df)
+}
+house_v2 <- updated_df(house)
+```
+
+```{r}
+summary(house_v2)
+```
+
+```{r}
+str(house_v2)
+```
+
+### 2.3 Skewness
+
+The analysis revealed moderate positive skewness in `price` (1.21) and `area` (1.31), which poses a risk of heteroscedasticity and biased coefficient estimates in linear models. To mitigate this, we applied a Box-Cox transformation. The transformation successfully normalized the data, reducing skewness to levels of 0.14 and 0.13 respectively. The resulting distributions are approximately symmetric, making them suitable for parametric statistical modeling
+
+```{r}
+cols_num <- names(house_v2)[sapply(house_v2, is.numeric)]
+skewed <- apply(house_v2[cols_num],2, skewness) # 2 indicates column
+print("skewed of Original Units")
+skewed
+```
+
+```{r}
+# skewed numeric variables
+ skewed_var <- c("price","area")
+
+# Transforms the numeric skewed variables by using Box-Cox transformation
+ for (v in skewed_var) {
+    # fit automatic Box-Cox transformation
+    bc <- BoxCoxTrans(house_v2[[v]] )   # +1 avoids zeros
+    house_v2[[v]] <- predict(bc, house_v2[[v]] )
+ }
+skewed <- apply(house_v2[cols_num],2, skewness) # 2 indicates column
+print("skewed of transformed Units")
+skewed
+```
+
+## 3. Exploration Data Analysis (EDA)
+
+### 3.1 Distribution of numeric variables
+
+The Box–Cox transformation markedly improved the distributions of both `price` and `area`, reducing right skewness and yielding approximately symmetric, near-normal variables. This supports the validity of parametric methods such as linear regression and ANOVA, while also reducing the impact of outliers and improving the reliability of parameter estimates.
+
+```{r}
+plots <- list()
+
+for (col in cols_num) {
+  p <- ggplot(house, aes(x = .data[[col]])) +
+    geom_histogram(bins = 40, fill = "skyblue", color = "white") +
+    labs(title = paste("Histogram of original", col)) +
+    theme_minimal()
+
+  plots[[col]] <- p
+}
+
+grid.arrange(grobs = plots, ncol = 2) # Arrange all plots in a 1x2 grid
+```
+
+```{r}
+plots <- list()
+
+for (col in cols_num) {
+  p <- ggplot(house_v2, aes(x = .data[[col]])) +
+    geom_histogram(bins = 40, fill = "skyblue3", color = "white") +
+    labs(title = paste("Histogram of transformed", col)) +
+    theme_minimal()
+
+  plots[[col]] <- p
+}
+
+grid.arrange(grobs = plots, ncol = 2) # Arrange all plots in a 1x2 grid
+```
+
+### 3.2 Distribution of categorical/factor variables
+
+The categorical variables reveal clear structural patterns in the housing stock. Most properties have three bedrooms (55%) and one bathroom (74%), indicating a predominance of moderately sized homes. Single- and two-story houses dominate the sample (42% and 44%, respectively). Most homes are located on the main road (86%), and the majority lack a guestroom (82%) and basement (65%). Hot water heating is rare (5%), while air conditioning is present in about one-third of homes (32%). Parking availability varies, with 55% offering no dedicated parking. A large share of homes (77%) lack a preferred area designation. Furnishing is fairly balanced, with 42% semi-furnished, 33% unfurnished, and 26% furnished. Overall, the dataset reflects primarily modest, functional homes with limited luxury amenities.
+
+```{r}
+cols_pie <- c('bedrooms', 'bathrooms', 'stories', 'mainroad', 'guestroom', 'basement','hotwaterheating','airconditioning','parking','prefarea','furnishingstatus')
+
+par(mfrow = c(2, 3),
+    #smaller margins
+    mar   = c(1, 1, 3, 1),   
+    oma   = c(0, 0, 2, 0))
+
+for (col in cols_pie) {
+  counts <- table(house_v2[[col]])
+  pct    <- round(100 * counts / sum(counts))
+  lbls   <- paste0(names(counts), " (", pct, "%)") #format labels
+  pal <- colorRampPalette(brewer.pal(12, "Set3"))(length(counts)) #color palette
+  pie(counts, labels = lbls, main   = col, col    = pal)
+}
+```
+
+### 3.3 Box plot `price` vs `categorical predictors`
+
+The box plots summarize how key categorical housing features relate to the log-transformed house price. **Structural characteristics,** like the number of **bedrooms, bathrooms, and stories,** show a clear positive association with price, with median prices rising consistently across categories. Properties located on the **main road**, and those with **air conditioning**, **hot water heating**, **a guestroom**, or a **basement** also exhibit noticeably higher median prices, indicating the strong impact of these amenities. In contrast, **parking capacity** beyond one space and **furnishing status** display weaker and less consistent effects on price. Overall, the results highlight that structural features and key amenities are the primary drivers of higher house prices in the dataset.
+
+```{r}
+cols_boxplot <- c('bedrooms', 'bathrooms', 'stories', 'mainroad', 'guestroom', 'basement','hotwaterheating','airconditioning','parking','prefarea','furnishingstatus')
+
+plot_list <- list()
+
+for (col in cols_boxplot) {
+  p <- ggplot(house_v2, aes_string(x = col, y = "price")) +
+    geom_boxplot(fill = "gold3") +
+    labs(title = paste("Log Price by", col)) +
+    theme_minimal(base_size = 9)
+
+  plot_list[[col]] <- p
+}
+
+grid.arrange(grobs = plot_list, ncol = 4) 
+```
+
+### 3.4 Scatter Plotting for `Price` vs `Area`
+
+The scatter plots show a clear positive relationship between **area** and **price**, indicating that larger properties tend to command higher prices. In the original scale, the association is moderately strong with some dispersion, while the log transformations produces a tighter, more linear pattern and stabilizes variability. This confirms that **area is a strong and meaningful predictor of price**, supports the use of linear regression, and helps identify potential outliers. Overall, the fitted regression line highlights a clear linear effect of area on price after transformation.
+
+```{r}
+plot(house$area, house$price,
+     main = "Scatter Plot of Price vs Area",
+     xlab = "Area",
+     ylab = "Price",
+     pch = 19,
+     col = "lightgreen")
+abline(lm(price ~ area, data = house), col = "red", lwd = 2)
+```
+
+```{r}
+plot(house_v2$area, house_v2$price,
+     main = "Scatter Plot of Log Price vs Log Area",
+     xlab = "Log Area",
+     ylab = "Log Price",
+     pch = 19,
+     col = "lightgreen")
+abline(lm(price ~ area, data = house_v2), col = "red", lwd = 2)
+```
+
+### 3.5 Correlation Matrix
+
+The correlation matrix provides an assessment of how housing features relate to the log-transformed price. While correlations do not imply causation, they help identify influential predictors for model selection. The key findings are summarized below.
+
+#### **1. Size and Structural Features**
+
+-   **Area** shows a **strong positive correlation (r=0.58)** with price, making it the most important predictor.
+
+-   **Number of stories** displays an overall **moderate positive relationship (0 to 0.36)**, indicating higher prices for multi-story homes.
+
+-   **Number of Bedrooms** show a **weak positive association (-0.37 to 0.22)**, meaning bedroom count alone is not a strong predictor compared to others.
+
+#### **2. Home Quality and Amenities**
+
+-   **Bathrooms** have a **moderate positive correlation (0.12 to 0.44)** with price. Homes with two or more bathrooms tend to be priced notably higher.
+
+-   **Air conditioning** also has a **moderate positive association (\~0.46)**, indicating that AC is a valuable feature in pricing.
+
+-   **Parking spaces** show a **weak to moderate positive correlation (0.13–0.30)**, meaning additional parking contributes to higher prices but not as strongly as interior features.
+
+#### **3. Location and Accessibility**
+
+-   **Main road access** and **preferred area** exhibit **moderate positive correlation (\~0.33 and \~0.34)**, , highlighting the importance of location in pricing.
+
+#### **4. Additional Features**
+
+-   **Guestroom (\~0.28)**, **basement (\~0.22)** show modest positive correlations with price, referring that these features also impact on the price of the house.
+-   **Hotwaterheating (\~0.09)** shows **weak correlations**, indicating limited independent effect on price.
+
+#### **5. Furnishing Status**
+
+-   **Semi-furnished** and **furnished** homes show a **weak to moderate positive relationship** with price.
+
+-   **Unfurnished** homes display a **negative correlation**, suggesting that furnished or semi-furnished properties tend to be valued higher than unfurnished ones.
+
+```{r}
+# Convert factors to dummy variables 
+df_dummies <- model.matrix(~ . - 1, data = house_v2) 
+cor_matrix <- cor(df_dummies, use = "pairwise.complete.obs")
+
+corrplot(cor_matrix,
+         method = "color",
+         addCoef.col = NULL,
+         tl.cex = 0.6,
+         tl.col = "black",
+         title = "Correlation Matrix with Dummy Variables",
+         mar = c(0,0,1,0))
+```
+
+### 3.6 EDA Conclusion
+
+The EDA indicates that home size, number of bathrooms, air conditioning, number of stories, and location-related factors (main road access and preferred area) exhibit the strongest positive associations with housing prices. Additional features such as a guestroom and basement also show meaningful positive effects. In contrast, hot water heating shows only a weak relationship, while unfurnished status is negatively associated with price. These findings help prioritize key predictors for modeling and clarify which housing attributes contribute most to price variation.
+
+## 4. Data Split
+
+### 4.1 Train/Test Data Split
+
+A 60/40 train–test split was created using a fixed seed for reproducibility. This ensures that the model is trained on one portion of the data while performance is evaluated on an independent subset.
+
+```{r}
+# Set seed for reproducibility
+set.seed(1)
+
+# Create training (60%) and testing (40%)
+train_index <- createDataPartition(house_v2$price, p = 0.6, list = FALSE)
+train_data <- house_v2[train_index, ]
+test_data <- house_v2[-train_index, ]
+
+x_train <- model.matrix(price ~ ., data = train_data)[, -1]
+y_train <- train_data$price
+
+x_test  <- model.matrix(price ~ ., data = test_data)[, -1]
+y_test  <- test_data$price
+
+# Performance function to compare models
+model_performance <- function(actual, predicted) {
+postResample(pred = predicted, obs = actual)
+}
+```
+
+```{r}
+# to check the split dataset class by using 'concatenate and print' function cat()
+cat("Class of train_data:==>",class(train_data),'\n')
+cat("Class of train_data:==>",class(test_data),'\n')
+cat("Class of train_data:==>",class(x_train),'\n')
+cat("Class of train_data:==>",class(y_train),'\n')
+cat("Class of train_data:==>",class(x_test),'\n')
+cat("Class of train_data:==>",class(y_test),'\n')
+```
+
+## 5. Modeling
+
+### 5.1 Multiple Linear Regression
+
+The multiple linear regression model is highly statistically significant (F-statistic=33.02, p-value\<2.2e-16), indicating that at least one predictor has a meaningful relationship with house price, while the VIF values confirm that multicollinearity is not a concern. The model demonstrates a strong fit, with an R² =0.7227 and adjusted R² =0.7018, showing that about 70–72% of the variation in house prices is explained by the included predictors. The RMSE =0.2069 and MAE =0.1548 indicate reasonably accurate predictions.
+
+The strongest significant predictors (p \< 0.001) are `area`, `stories`, `air conditioning`, and `preferredarea`, while `bathrooms`, `mainroadaccess`, `guestroom`, `basement`, and `parking` with one or two spaces are also statistically significant. In contrast, `unfurnished status` has a significant negative effect on price, and `bedrooms`, and three `parking` spaces are not statistically significant, indicating a limited contribution to price prediction.
+
+```{r}
+lm_model <- lm(price ~ ., data = train_data)
+summary(lm_model)
+
+lm_pred <- predict(lm_model, newdata = test_data)
+lm_perf <- model_performance(y_test, lm_pred)
+lm_perf
+vif(lm_model) #check multicollinearity
+```
+
+### 5.2 MLR+ interactions
+
+Similar as the previous model, the regression model with the `area × guestroom` interaction is highly significant (F=33.34, p\<2.2e−16) and explains a large share of the variation in house prices (R²=0.7247, Adj. R²=0.7029). Area remains the strongest predictor of price, while bathrooms, number of stories, main road access, air conditioning, parking (1 and 2 spaces), and preferred area also have significant positive effects. Basement remains significant, but guestroom and area–guestroom interaction are not significant. The model shows good predictive accuracy (RMSE=0.2051 MAE=0.1536).
+
+```{r}
+lm_int_model <- lm(price ~ . + area*guestroom, data = train_data)
+summary(lm_int_model)
+
+lm_int_pred <- predict(lm_int_model, newdata = test_data)
+lm_int_perf <- model_performance(y_test, lm_int_pred)
+lm_int_perf
+```
+
+### 5.3 LASSO
+
+The LASSO model was fit using 10-fold cross-validation to select the optimal regularization parameter. The model reduces several coefficients toward 0 as expected, and the resulting test performance (RMSE=0.2063) is slightly better to the MLR models, indicating that LASSO does not substantially improve predictive accuracy. The cross-validation curve shows that the mean squared error decreases rapidly as the penalty parameter increases and stabilizes near the optimal value of λ, indicating a good bias–variance trade-off. The final sparse LASSO model retains 19 predictors.
+
+```{r}
+set.seed(1)
+# LASSO
+lasso_cv <- cv.glmnet(x_train, 
+                      y_train,
+                      alpha = 1,              
+                      nfolds = 10
+                     )
+
+plot(lasso_cv)
+lasso_model <- glmnet(x_train, 
+                      y_train,
+                      alpha = 1,
+                      lambda = lasso_cv$lambda.min
+                      )
+
+# Extract coefficients at optimal lambda
+lasso_coef <- coef(lasso_model)
+lasso_selected <- lasso_coef[lasso_coef[, 1] != 0, , drop = FALSE]
+lasso_selected
+
+lasso_pred <- predict(lasso_model, newx = x_test)
+lasso_perf <- model_performance(y_test, as.numeric(lasso_pred))
+lasso_perf
+```
+
+### 5.4 Ridge
+
+Ridge regression was tuned using 10-fold cross-validation to select the optimal penalty parameter. Using the optimal λ, the Ridge model achieves a test RMSE=0.2042, R² =0.6864, and MAE =0.1515, demonstrating good predictive performance that is slightly better than the standard multiple linear regression model but comparable to LASSO. Unlike LASSO, Ridge retains all predictors with shrunk coefficients, confirming that no variable is fully removed from the model. The largest positive effects remain associated with area, number of bathrooms, number of stories, air conditioning, preferred area, main road access, basement, and parking (1 and 2 spaces). Overall, Ridge improves coefficient stability through shrinkage but does not provide substantial gains in predictive accuracy compared with the simpler linear and LASSO models.
+
+```{r}
+set.seed(1)
+# Ridge 
+ridge_cv <- cv.glmnet(x_train, 
+                      y_train,
+                      alpha = 0,
+                      nfolds = 10
+                      )
+
+plot(ridge_cv)
+ridge_model <- glmnet(x_train, 
+                      y_train,
+                      alpha = 0,
+                      lambda = ridge_cv$lambda.min
+                      )
+
+# Extract coefficients at optimal lambda
+ridge_coef <- coef(ridge_model)
+ridge_selected <- ridge_coef[ridge_coef[, 1] != 0, , drop = FALSE]
+ridge_selected
+
+ridge_pred <- predict(ridge_model, newx = x_test)
+ridge_perf <- model_performance(y_test, as.numeric(ridge_pred))
+ridge_perf
+```
+
+### 5.5 Elastic Net
+
+Elastic Net, which combines both LASSO and Ridge penalties, was tuned using 10-fold cross-validation to select its optimal regularization strength. The model performs similarly to the individual LASSO and Ridge models, with test metrics (RMSE =0.2059, R² =0.6811, and MAE =0.1526). This indicates that blending the two regularization methods does not substantially enhance predictive accuracy. The final Elastic Net model retains 20 predictors, indicating moderate shrinkage with limited variable elimination. Overall, Elastic Net provides stable coefficient estimation and effective regularization, but like Ridge and LASSO, it does not yield a substantial improvement in predictive accuracy over the baseline linear regression model.
+
+```{r}
+set.seed(1)
+# mix of LASSO and Ridge
+elastic_cv <- cv.glmnet(x_train, 
+                        y_train,
+                        alpha = 0.5,
+                        nfolds = 10
+                        )
+
+plot(elastic_cv)
+elastic_model <- glmnet(x_train, 
+                        y_train,
+                        alpha = 0.5,
+                        lambda = elastic_cv$lambda.min
+                        )
+
+# Extract coefficients at optimal lambda
+elastic_coef <- coef(elastic_model)
+elastic_selected <- elastic_coef[elastic_coef[, 1] != 0, , drop = FALSE]
+elastic_selected
+
+elastic_pred <- predict(elastic_model, newx = x_test)
+elastic_perf <- model_performance(y_test, as.numeric(elastic_pred))
+elastic_perf
+```
+
+### 5.6 Random Forest
+
+The Random Forest model was trained using 10-fold cross-validation with 500 trees, and the optimal tuning parameter was mtry=2, which achieved the best performance. The final model yields a test RMSE=0.2247, R² =0.6214, and MAE =0.1664, indicating reasonable predictive accuracy but weaker performance compared to the linear and shrinkage regression models. The variable importance plot highlights area as the most influential predictor, followed by air conditioning, number of bathrooms, preferred area, and basement. Overall, the random forest captures nonlinear feature importance effectively but does not outperform the regression-based models in terms of predictive accuracy for this dataset.
+
+```{r}
+set.seed(1)
+
+train_control <- trainControl(method = "cv", number = 10, savePredictions = "final")
+
+rf_cv_model <- train(price ~ ., 
+                     data = train_data, 
+                     method = "rf", 
+                     trControl = train_control,
+                     ntree = 500,          # Passed to randomForest
+                     importance = TRUE)    # Passed to randomForest
+
+# CV Results
+print(rf_cv_model$results)
+
+# variable importance
+plot(varImp(rf_cv_model))
+
+# Final prediction 
+rf_pred <- predict(rf_cv_model, newdata = test_data)
+rf_perf <- model_performance(test_data$price, rf_pred)
+rf_perf
+```
+
+### 5.7 Gradient Boosting
+
+The Gradient Boosting model identifies `area` as the most dominant predictor of house price, accounting for ≈49% of the total relative influence . The next most influential predictors are bathrooms, air conditioning, stories, and parking, highlighting the strong role of both structural features and key amenities in determining housing value. The GBM achieves a test RMSE=0.252, R²=0.580, and MAE=0.193, which is notably weaker than the regression-based and regularized models. This suggests that, despite capturing nonlinear relationships and interactions, the Gradient Boosting model does not generalize as well on this dataset.
+
+```{r}
+set.seed(1)
+
+gbm_model <- gbm(
+  formula = price ~ .,
+  data = train_data,
+  distribution = "gaussian",
+  n.trees = 2000,
+  interaction.depth = 3,
+  shrinkage = 0.01,
+  n.minobsinnode = 10,
+  bag.fraction = 0.8,
+  train.fraction = 0.8,  
+  cv.folds = 10,         # 10-fold CV
+  verbose = FALSE
+)
+
+summary(gbm_model)
+best_iter <- gbm.perf(gbm_model, method = "cv", plot.it = FALSE)
+gbm_pred <- predict(gbm_model, newdata = test_data, n.trees = best_iter)
+
+gbm_perf <- model_performance(test_data$price, gbm_pred)
+gbm_perf
+
+```
+
+## 6. Interpretation and Model Selection
+
+### 6.1 Model Comparison
+
+The comparison results indicate that all linear and regularized regression models perform competitively, with relatively close test RMSE, R², and MAE values. Among them, Ridge regression achieves the lowest RMSE (0.2042) and highest R² (0.6864), indicating the strongest overall predictive performance. The Linear model with interactions and the Elastic Net follow very closely, suggesting that they provide only marginal improvements over the baseline linear structure.
+
+The LASSO and standard MLR models also show similar predictive accuracy, confirming that the relationship between predictors and house price is largely well explained through linear effects. In contrast, the Random Forest and especially the Gradient Boosting models perform noticeably worse, with higher RMSE values and lower R². This suggests that complex nonlinear models do not offer an advantage for this dataset.
+
+```{r}
+model_results <- bind_rows(
+  data.frame(Model = "Linear",        t(lm_perf)),
+  data.frame(Model = "Linear + Interactions", t(lm_int_perf)),
+  data.frame(Model = "LASSO",         t(lasso_perf)),
+  data.frame(Model = "Ridge",         t(ridge_perf)),
+  data.frame(Model = "Elastic Net",   t(elastic_perf)),
+  data.frame(Model = "Random Forest", t(rf_perf)),
+  data.frame(Model = "Gradient Boosting", t(gbm_perf))
+)
+
+model_results <- model_results %>% arrange(RMSE)   # lower RMSE is better
+
+model_results
+
+```
+
+### 6.2 Selected model
+
+Based on the overall performance metrics and model behavior, **Ridge regression is selected as the final predictive model.**
+
+-   This choice is driven by its superior predictive accuracy, showed by the lowest RMSE and highest R² among all methods.
+
+-   It provides stable coefficient estimates through shrinkage, effectively mitigating the potential effects of multicollinearity without removing important predictors from the model.
+
+-   Compared to LASSO and Elastic Net, Ridge achieves slightly better predictive performance while retaining all relevant features, supporting more comprehensive interpretation.
+
+-   When compared with machine-learning models, Ridge offers substantial advantages in terms of interpretability and stability.
+
+These qualities make Ridge regression a reliable and well-balanced choice for the final model.
+
+### 6.3 Conclusion:
+
+This analysis demonstrates that regularized linear modeling is the most effective for predicting house prices in the dataset. Although more complex models such as Random Forest and Gradient Boosting are capable of capturing nonlinear relationships and interaction effects, they do not outperform simpler linear approaches in terms of predictive accuracy on this dataset. The results indicate that house price variation is primarily driven by linear effects related to property size, structural characteristics, key amenities, and location attributes. Among all the models evaluated, **Ridge regression** emerges as the best-performing and most reliable option, offering the optimal balance between accuracy, robustness, and interpretability.
+
+### 6.4 Next steps
+
+We consider that the current modeling can be improved and strengthened through the following:
+
+-   Incorporate additional external and spatial variables, such as public transport accessibility, school rankings, and neighborhood safety, to better capture location-driven price effects and enhance predictive accuracy.
+
+-   Use time-series housing data to enable price forecasting, market trend analysis, providing deeper insight into how housing prices evolve over time.
